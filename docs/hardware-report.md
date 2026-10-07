@@ -137,6 +137,12 @@ Verified on hardware: laptop layout, upright (book) mode, touch, and the login s
 - `keyboard-hid-asus` provides backlight, Fn keys, Fn-lock and the microphone LED over both USB and Bluetooth. (An earlier separate `keyboard-backlight` udev module was folded into it.) Copilot/MyASUS/F13/display-switch keys have no action assigned.
 - Bluetooth: the keyboard must be paired for it to work when detached; once paired, backlight and keys work over BT. See [`research-notes.md`](research-notes.md) for pairing steps.
 
+#### 3.3.1 Touchpad palm rejection (`touchpad-palm`)
+
+- The touchpad (hid-multitouch, 126×74 mm, reports `ABS_MT_TOOL_TYPE` but no pressure or touch size) is on USB when docked and on Bluetooth when detached. systemd's `65-integration.rules` sets `ID_INTEGRATION=external` for both, and libinput 1.32 skips disable-while-typing, edge palm zones and `MT_TOOL_PALM` handling on external touchpads (`Disable-w-typing: n/a`).
+- Fix: a libinput quirk `AttrTPKComboLayout=below` for `0b05:1cd7` and `0b05:1cd8`. An external touchpad+keyboard combo gets the same palm handling as an internal touchpad and pairs DWT with the keyboard of the same vendor/product (`palm: dwt activated with … Touchpad<->Asus Keyboard`).
+- Marking the devices internal instead (like libinput's ROG Flow Z13 quirk) would pair the keyboard with the lid switch: with the keyboard detached and the laptop closed on an external monitor, a key press would report the lid as open, and the touchpad would be disabled. The combo layout has neither effect.
+
 ### 3.4 Power and performance: the biggest win
 
 The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hardware-scan/dtt/`). Windows applies these tables; Linux did not:
@@ -266,6 +272,7 @@ Measured over 30 s idle on battery: `duo-rotate`, `zenbook-duo-profile-sync` and
 | P1 | `system-health`: DKMS check after kernel updates, fix check at login | ✅ notifies only on problems |
 | P2 | `desktop-power-widget`: live power draw in the panel | ✅ |
 | P1 | Bluetooth keyboard | ✅ pairs; backlight and keys work |
+| P1 | `touchpad-palm`: palm rejection and disable-while-typing on the keyboard's touchpad | ✅ USB verified (DWT paired); Bluetooth to be confirmed |
 | P2 | `display-dpcd-backlight`: panel brightness over DPCD | ✅ |
 | P2 | `display-psr-et-off`: ghost cursor | ✅ |
 | P2 | `display-dsc-10bit`: 10-bit via DSC | ✅ bpp 18 → 30, PR SU stays on, no power cost (4.95 / 4.78 W) |

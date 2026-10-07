@@ -1,0 +1,12 @@
+# >>> zenbook-duo-2026-linux touchpad-palm
+# The keyboard's touchpad reaches the laptop over USB pogo pins when docked
+# (0b05:1cd7) and over Bluetooth when detached (0b05:1cd8), so libinput treats it
+# as an external touchpad: no disable-while-typing, no palm detection, and the
+# touchpad's own palm flag (MT_TOOL_PALM) is ignored. It sits below the keys of
+# the same device, which is what libinput's touchpad+keyboard combo layout is for.
+[ASUS Zenbook Duo 2026 keyboard touchpad]
+MatchUdevType=touchpad
+MatchVendor=0x0B05
+MatchProduct=0x1CD7;0x1CD8
+AttrTPKComboLayout=below
+# <<< zenbook-duo-2026-linux touchpad-palm

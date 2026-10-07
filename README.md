@@ -31,6 +31,7 @@ one command fixes them, one command undoes it.
 | 🎨 **Colour** | ⚠️ 6-bit with dithering | ✅ 10-bit |
 | 🖱️ **Mouse cursor on the top screen** | ❌ ghost copies stay behind | ✅ clean |
 | 💡 **Keyboard backlight and Fn keys** | ❌ backlight stuck, most keys dead when attached | ✅ work, attached and on Bluetooth |
+| 🖐️ **Palm on the touchpad while typing** | ❌ cursor jumps, stray clicks | ✅ ignored, attached and on Bluetooth |
 | 🧭 **Rotation, light and hinge sensors** | ❌ missing | ✅ work |
 | 🚀 **Performance** | ⚠️ capped at 20 W | ✅ Windows power limits (up to 64 W) |
 | 🤫 **Quiet / battery-saver mode** | ⚠️ does nothing | ✅ quiet fans, lower power |
@@ -103,6 +104,7 @@ Measured on a UX8407AA with BIOS 310, `linux-cachyos` 7.2.9 and KDE Plasma 6.7.
 | **Colour depth** | 6-bit + dithering (`bpp=18`): 2880×1800@144 Hz doesn't fit the eDP link at 8 bpc, and the driver drops bits instead of using DSC. | 10-bit (`bpp=30`) through DSC; Panel Replay keeps working, same power. | `display-dsc-10bit` |
 | **Cursor on the top screen** | 2–3 frozen copies of the cursor stay on screen (Panel Replay *Early Transport* bug). | One cursor. Only Early Transport is off; Panel Replay Selective Update keeps saving power. | `display-psr-et-off` |
 | **Keyboard backlight, Fn keys** | The backlight never changes (stock `hid-asus` sends 64-byte reports, the keyboard times out with `-110`). Most Fn keys are dead over USB. The mic-mute LED never lights. | 3-level backlight; Fn keys (brightness, mic mute, backlight, …) work over USB and Bluetooth; the mic-mute LED follows the mute state. | `keyboard-hid-asus` |
+| **Keyboard touchpad while typing** | The touchpad is on USB (docked) or Bluetooth, so libinput treats it as external: no disable-while-typing, no palm detection, and the touchpad's own palm reports are ignored. | Marked as the lower half of a touchpad+keyboard combo: disable-while-typing, edge palm zones and firmware palm reports, docked and on Bluetooth. | `touchpad-palm` |
 | **Sustained performance** | No one runs Intel DTT: power limits stay at the firmware default, PL1 20 W / PL2 30 W. | Windows' own DTT tables per profile: balanced PL1 28→42 W / PL2 55 W, performance PL1 55 W / PL2 64 W. | `power-dtt` |
 | **Power saver** | KDE's "Power Save" leaves the firmware in balanced: neither ASUS quiet nor the Intel low-power slider survives the shared `platform_profile` list. Switching straight from Performance snaps back to Balanced within a second. | Power Save = ASUS quiet fans + SoC low-power + Xe GPU power saving (Windows "Whisper": PL1 20–30 W). Every switch sticks. | `power-profile-sync` |
 | **Wi-Fi latency** (BE201) | Power save always on: 16 ms average to the router, spikes to 158 ms. | On AC: 7 ms, no spikes. On battery: power save stays on. | `wifi-powersave-ac` |
@@ -128,7 +130,7 @@ Details, logs and upstream references for each line: [`docs/hardware-report.md`]
 | Touchscreens | ACPI `RAYD0001` (top) and `RAYD0002` (bottom) | `touchscreen-hid`, touch mapping |
 | Audio | SoundWire, PCI subsystem `1043:1444`: CS42L43 + 2× CS35L56 | `audio-ghost-rt722` matches this board |
 | Sensor hub | Intel ISH `8086:e445` | Needs ASUS's signed firmware for rotation and ambient light |
-| Keyboard | ASUS `0b05:1cd7` (USB, docked) / `0b05:1cd8` (Bluetooth) | `keyboard-hid-asus` |
+| Keyboard | ASUS `0b05:1cd7` (USB, docked) / `0b05:1cd8` (Bluetooth) | `keyboard-hid-asus`, `touchpad-palm` |
 | Distribution | Arch, CachyOS or another Arch derivative | `pacman`/DKMS helpers; config-only modules work anywhere |
 | Desktop | KDE Plasma 6 on Wayland | `desktop-kde-duo` (all other modules are desktop-independent) |
 
@@ -152,7 +154,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 </details>
 
 <details>
-<summary><b>📦 The 17 modules</b></summary>
+<summary><b>📦 The 18 modules</b></summary>
 
 | Module | What it changes | Kernels |
 |---|---|---|
@@ -166,6 +168,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `display-dsc-10bit` | Forces DSC on both panels for 10 bpc (debugfs at boot) | all |
 | `display-edp2-tcss` | DKMS `xe` that requests Type-C subsystem power for the bottom panel (xe #9196), built from the running kernel's own sources | 7.x |
 | `keyboard-hid-asus` | DKMS `hid-asus`: Duo IDs, 16-byte feature reports, hotkey descriptor fix, Fn-lock, mic-mute LED | 7.2.x, 7.3.x |
+| `touchpad-palm` | libinput quirk: the keyboard's touchpad as a touchpad+keyboard combo (palm rejection, disable-while-typing) | all |
 | `power-dtt` | `thermald --adaptive` with the BIOS's DTT tables | all |
 | `power-profile-sync` | Maps power-profiles-daemon profiles onto asus-wmi, the SoC slider and the Xe GPU | all |
 | `power-runtime-pm` | udev: runtime PM for PCI devices that ship without it | all |
@@ -235,6 +238,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | Panel Replay Early Transport ghost cursor | to be reported to drm/xe |
 | Bottom panel after a docked power-on (TCSS power for Port B) | [xe #9196](https://gitlab.freedesktop.org/drm/xe/kernel/-/issues/9196); [RFC sent to intel-gfx / intel-xe](https://lore.kernel.org/all/20261006-ptl-port-b-tcss-v1-1-240670342cd3@gmail.com/) on 2026-10-06, carried as DKMS in `display-edp2-tcss` |
 | `hid-asus` Zenbook Duo keyboard support | to be submitted |
+| Keyboard touchpad palm rejection (libinput quirk) | to be submitted to libinput |
 | HDR (DisplayID 2.0 HDR metadata) | fixed in libdisplay-info 0.4.0; Arch packaging update pending |
 | KDE: one backlight per built-in panel | KDE bug 525717 |
 
