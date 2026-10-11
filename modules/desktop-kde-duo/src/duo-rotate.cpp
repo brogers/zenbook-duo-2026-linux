@@ -6,8 +6,6 @@
 //  * the top panel (eDP-1) is mounted upside down, the bottom one (eDP-2) is not,
 //    so the two outputs need transforms 180 degrees apart and a layout that follows
 //    the hinge; KWin rotates every output the same way and never re-lays them out;
-//  * KWin resets per-device touch orientation whenever an output transform changes,
-//    which breaks the top touchscreen after every rotation;
 //  * KWin reacts to every orientation change instantly.
 //
 // Behaviour:
@@ -17,8 +15,8 @@
 //  * otherwise follow iio-sensor-proxy, but only after an orientation has been
 //    stable for STABLE_MS. The accelerometer is only claimed while undocked, so
 //    the sensor hub can stay idle when the posture is fixed anyway;
-//  * after any output change (ours, KWin's or the user's), a re-added input device
-//    or a resume, re-apply touch mapping;
+//  * at start, when KWin adds an input device and after a resume, check that each
+//    touchscreen and pen is mapped to its own panel (see applyTouch);
 //  * eDP-2 wedge (xe #7764 / #9196): booting with the keyboard docked leaves the
 //    bottom panel's PHY without refclk; the first enable of pipe B then fails and
 //    can hang the whole machine. So after a docked power-on the bottom panel is
@@ -55,7 +53,7 @@
 using Rotation = KScreen::Output::Rotation;
 
 static constexpr int STABLE_MS = 1000;   // orientation must hold this long
-static constexpr int TOUCH_DELAY_MS = 400; // let KWin finish its own reset first
+static constexpr int TOUCH_DELAY_MS = 2000; // let KWin finish setting up added devices first
 static constexpr int DOCK_STABLE_MS = 1000; // dock state must hold this long (pogo pins bounce)
 static constexpr int WEDGE_CHECK_MS = 12000; // pipe B flip_done times out after 10 s
 static constexpr double DOCKED_BOOT_S = 20; // keyboard enumerated this soon after power-on: it was docked
@@ -65,6 +63,19 @@ static const QString TOP = QStringLiteral("eDP-1");
 static const QString BOTTOM = QStringLiteral("eDP-2");
 
 static void log(const QString &s) { std::cerr << "duo-rotate: " << s.toStdString() << std::endl; }
+
+// KWin serialises a calibration matrix as 16 comma-separated numbers, row by row.
+static bool isIdentity(const QString &matrix)
+{
+    const QStringList v = matrix.split(QLatin1Char(','));
+    if (v.size() != 16)
+        return false;
+    for (int i = 0; i < 16; ++i) {
+        if (v[i].toFloat() != (i % 5 == 0 ? 1.f : 0.f))
+            return false;
+    }
+    return true;
+}
 
 // The patched xe from modules/display-edp2-tcss powers eDP-2's PHY itself, so a
 // docked power-on no longer breaks the bottom panel.
@@ -203,8 +214,7 @@ public:
                     QStringLiteral("org.freedesktop.login1.Manager"), QStringLiteral("PrepareForShutdown"), this,
                     SLOT(prepareForShutdown(bool)));
 
-        // KWin forgets a touchscreen's orientation whenever the device is re-added, e.g.
-        // when i2c-hid re-probes on resume, without any output change: remap then too.
+        // Devices are re-added e.g. when i2c-hid re-probes on resume: check them again.
         QDBusConnection::sessionBus().connect(QStringLiteral("org.kde.KWin"), QStringLiteral("/org/kde/KWin/InputDevice"),
                                               QStringLiteral("org.kde.KWin.InputDeviceManager"), QStringLiteral("deviceAdded"), this,
                                               SLOT(inputDeviceAdded(QString)));
@@ -220,10 +230,9 @@ public:
             }
             m_config = static_cast<KScreen::GetConfigOperation *>(o)->config();
             KScreen::ConfigMonitor::instance()->addConfig(m_config);
-            connect(KScreen::ConfigMonitor::instance(), &KScreen::ConfigMonitor::configurationChanged, this,
-                    [this] { m_touch.start(); });
             m_dockChanged = true; // enforce the panel state once at startup
             applyRotation();
+            m_touch.start();
             checkWedge(); // the login screen may already have wedged pipe B
             QTimer::singleShot(3000, this, [this] { syncBottomBrightness(); });
         });
@@ -443,16 +452,13 @@ private:
             }
         }
 
-        if (!changed) {
-            m_touch.start();
+        if (!changed)
             return;
-        }
         log(QStringLiteral("orientation=%1 docked=%2 -> %3=%4 %5=%6")
                 .arg(m_orientation)
                 .arg(m_docked)
                 .arg(TOP, QString::fromLatin1(name(top)), BOTTOM, QString::fromLatin1(name(bottom))));
-        auto *op = new KScreen::SetConfigOperation(m_config);
-        connect(op, &KScreen::SetConfigOperation::finished, this, [this] { m_touch.start(); });
+        new KScreen::SetConfigOperation(m_config);
         if (enabledBottom) {
             QTimer::singleShot(WEDGE_CHECK_MS, this, [this] { checkWedge(); });
             // after the modeset, and once more in case the firmware resets it late
@@ -461,9 +467,26 @@ private:
         }
     }
 
-    // Map each touchscreen/pen to its panel. The top digitizer reports upright
-    // coordinates while its output is rotated 180 degrees more than the content,
-    // so it needs a constant 180 degree compensation; the bottom one needs none.
+    bool outputEnabled(const QString &output) const
+    {
+        for (const auto &o : m_config ? m_config->outputs() : KScreen::OutputList()) {
+            if (o->name() == output)
+                return o->isEnabled();
+        }
+        return false;
+    }
+
+    // Map each touchscreen/pen to its panel: the two panels are identical, so KWin
+    // cannot tell which digitizer belongs where. The top digitizer reports upright
+    // coordinates while its output is rotated 180 degrees more than the content; that
+    // constant offset is libinput's default calibration for it (udev rule from
+    // modules/touchscreen-hid), which KWin keeps. KWin's per-device orientation is
+    // not used: KWin resets it on every output change, automatic-brightness steps
+    // included.
+    //
+    // Only write when something is off. KWin runs these D-Bus writes on its input
+    // thread and saves kcminputrc from there and from its main thread without locking:
+    // rewriting the orientation after every output change crashed KWin (2026-10-12).
     void applyTouch()
     {
         auto ses = QDBusConnection::sessionBus();
@@ -475,26 +498,35 @@ private:
                                QStringLiteral("org.kde.KWin.InputDevice"), ses);
             const QString n = dev.property("name").toString();
             QString out;
-            int orient = 0;
-            if (n == QLatin1String("RAYD0001:00 2386:8C05") || n == QLatin1String("RAYD0001:00 2386:8C05 Stylus")) {
+            if (n == QLatin1String("RAYD0001:00 2386:8C05") || n == QLatin1String("RAYD0001:00 2386:8C05 Stylus"))
                 out = TOP;
-                orient = 8; // Qt::InvertedLandscapeOrientation
-            } else if (n == QLatin1String("RAYD0002:00 2386:8C06") || n == QLatin1String("RAYD0002:00 2386:8C06 Stylus")) {
+            else if (n == QLatin1String("RAYD0002:00 2386:8C06") || n == QLatin1String("RAYD0002:00 2386:8C06 Stylus"))
                 out = BOTTOM;
-            } else {
+            else
+                continue;
+            // KWin only finds enabled outputs by name: leave the docked bottom panel's alone.
+            if (outputEnabled(out) && dev.property("outputName").toString() != out) {
+                dev.setProperty("outputName", out);
+                log(QStringLiteral("touch: %1 -> %2").arg(n, out));
+            }
+            const QString def = dev.property("defaultCalibrationMatrix").toString();
+            if (isIdentity(def)) {
+                if (out == TOP && !m_toldCalibration) {
+                    m_toldCalibration = true;
+                    log(QStringLiteral("touch: %1 has no calibration, touches land mirrored: apply modules/touchscreen-hid").arg(n));
+                }
                 continue;
             }
-            bool fixed = false;
-            if (dev.property("outputName").toString() != out) {
-                dev.setProperty("outputName", out);
-                fixed = true;
+            // Earlier versions used orientation 8 instead and left an identity
+            // calibration in kcminputrc, which overrides libinput's default: undo both.
+            if (dev.property("orientationDBus").toInt() != 0) {
+                dev.setProperty("orientationDBus", 0);
+                log(QStringLiteral("touch: %1 orientation back to 0").arg(n));
             }
-            if (dev.property("orientationDBus").toInt() != orient) {
-                dev.setProperty("orientationDBus", orient);
-                fixed = true;
+            if (isIdentity(dev.property("calibrationMatrix").toString())) {
+                dev.setProperty("calibrationMatrix", def);
+                log(QStringLiteral("touch: %1 calibration back to its default").arg(n));
             }
-            if (fixed)
-                log(QStringLiteral("touch: %1 -> %2 orientation %3").arg(n, out).arg(orient));
         }
     }
 
@@ -508,6 +540,7 @@ private:
     bool m_wedged = false;
     bool m_dockedAtBoot = false;
     bool m_toldDockedBoot = false;
+    bool m_toldCalibration = false;
     udev *m_udev = nullptr;
     udev_monitor *m_udevMon = nullptr;
     QTimer m_stable, m_touch, m_dockStable;

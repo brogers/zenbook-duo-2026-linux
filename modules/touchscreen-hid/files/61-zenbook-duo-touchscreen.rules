@@ -1,0 +1,6 @@
+# zenbook-duo-2026-linux (touchscreen-hid): the top panel (eDP-1) is mounted upside
+# down but its digitizer (ACPI RAYD0001) is not, so touch and pen coordinates are
+# rotated 180 degrees from the panel's scan-out. Make the rotation back libinput's
+# default calibration for both devices: compositors map touch in the panel's own
+# frame, and KWin keeps a default calibration across output changes.
+ACTION!="remove", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="RAYD0001:00 2386:8C05*", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"

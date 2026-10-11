@@ -93,7 +93,7 @@ Measured on a UX8407AA with BIOS 310, `linux-cachyos` 7.2.9 and KDE Plasma 6.7.
 
 | Hardware | Out of the box | With this repo | Module |
 |---|---|---|---|
-| **Top touchscreen + pen** (Raydium `RAYD0001`) | Dead. `raydium_i2c_ts` grabs a HID-over-I2C device it can't drive, and can Oops in `raydium_i2c_irq`. | Touch, multitouch and pen work through `i2c-hid`. | `touchscreen-hid` |
+| **Top touchscreen + pen** (Raydium `RAYD0001`) | Dead. `raydium_i2c_ts` grabs a HID-over-I2C device it can't drive, and can Oops in `raydium_i2c_irq`. | Touch, multitouch and pen work through `i2c-hid`, under the finger (the digitizer sits 180° from its upside-down panel). | `touchscreen-hid` |
 | **Speakers, headphones, mics** (CS42L43 + 2× CS35L56) | On 7.2.x: no sound card, only "Dummy Output". The BIOS declares an RT722 that isn't fitted, and `sof_sdw` fails with `-12`. | Sound card registers; speakers use ASUS's calibrated amp tuning, HiFi profile, jack detection. (7.3+ has the fix upstream.) | `audio-ghost-rt722` |
 | **Accelerometer, ambient light, hinge sensor** (Intel ISH) | No sensors at all. The ISH rejects the generic firmware, so there is no auto-rotation and no auto-brightness. | All three sensors run on ASUS's signed ISH image, downloaded from ASUS and checksum-verified. | `sensors-ish-firmware` |
 | **Rotation** | Screens upside down (the top panel is mounted 180° rotated). KWin turns both panels the same way, touch stops working after any rotation, and a brief tilt flips the screen. | Correct orientation; both panels rotate together, laid out around the hinge (laptop, tent, book). Touch and pen follow every change. Rotation waits for a 1 s stable reading. | `sensors-accel-mount`, `desktop-kde-duo` |
@@ -158,7 +158,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 
 | Module | What it changes | Kernels |
 |---|---|---|
-| `touchscreen-hid` | Keeps `raydium_i2c_ts` off `RAYD0001`, so `i2c-hid` binds it | all |
+| `touchscreen-hid` | Keeps `raydium_i2c_ts` off `RAYD0001`, so `i2c-hid` binds it; udev: libinput calibration for its 180° offset | all |
 | `audio-ghost-rt722` | DKMS `soundwire-intel` with the upstream ghost-RT722 quirk (ca02ffd4975c) | 7.2.x |
 | `sensors-ish-firmware` | ASUS-signed ISH firmware in `/usr/lib/firmware/updates` | all |
 | `sensors-accel-mount` | hwdb accelerometer mount matrix (panels mounted 180°) | all |
@@ -241,6 +241,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | Keyboard touchpad palm rejection (libinput quirk) | to be submitted to libinput |
 | HDR (DisplayID 2.0 HDR metadata) | fixed in libdisplay-info 0.4.0; Arch packaging update pending |
 | KDE: one backlight per built-in panel | KDE bug 525717 |
+| KWin crashes when input-device settings are written over D-Bus during a screen change | to be reported to KDE |
 
 </details>
 
@@ -310,7 +311,7 @@ Reports and measurements from other UX8407AA units are very welcome. `./duo scan
 - Charles Keepax (Cirrus Logic) for the ghost-RT722 SoundWire quirk for this model.
 - [asus-expertbook-linux](https://github.com/burakgon/asus-expertbook-linux), the sister project for the ExpertBook Ultra on the same platform: the power-profiles-daemon snap-back fix and the freeze runbook come from there.
 - [Omarchy](https://github.com/basecamp/omarchy) for its Panther Lake hardware notes.
-- [zenbook-duo-omarchy](https://github.com/scrambletools/zenbook-duo-omarchy) and [zenbook-duo26-Ubuntu26.04](https://github.com/therealarnold666/zenbook-duo26-Ubuntu26.04), the Omarchy and Ubuntu projects for the same laptop: their bottom-screen (eDP-2) investigations, recovery recipe and Panel Replay findings. Do not install them together with this repo: the Ubuntu project's touchscreen calibration matrix breaks touch under KWin, and both drive the same displays.
+- [zenbook-duo-omarchy](https://github.com/scrambletools/zenbook-duo-omarchy) and [zenbook-duo26-Ubuntu26.04](https://github.com/therealarnold666/zenbook-duo26-Ubuntu26.04), the Omarchy and Ubuntu projects for the same laptop: their bottom-screen (eDP-2) investigations, recovery recipe and Panel Replay findings. Do not install them together with this repo: they drive the same displays.
 
 ## License
 

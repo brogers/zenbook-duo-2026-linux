@@ -107,25 +107,35 @@ Reproduced here on 2026-10-06 (7.2.9): two warm reboots with the keyboard docked
 
 - The top panel (eDP-1) is mounted 180° rotated; the bottom panel (eDP-2) is mounted normally (0°). (An initial assumption that both were rotated was wrong.) KWin does not apply the DRM `panel_orientation` property; a kernel parameter was tried and reverted.
 - `sensors-accel-mount` installs an hwdb entry `ACCEL_MOUNT_MATRIX=-1,0,0;0,-1,0;0,0,1`, so the sensor reports the correct orientation for the chassis.
-- The touch digitizers are not rotated (raw coordinates match what the viewer sees), but KWin rotates touches 180° together with the output transform.
-- **Tried and rejected**:
-  - libinput calibration matrix (`-1 0 1 0 -1 1`): in KWin it collapses all touches into a single point; unusable.
-  - KWin per-device touch orientation `Orientation=8` plus mapping RAYD0001→eDP-1, RAYD0002→eDP-2, reapplied at each login (`tools/kde-touch-setup.sh`), and setting each output's auto-rotate policy to "InTabletMode" with a fixed rotation (`tools/duo-kscreen`, since `kscreen-doctor` cannot set this). Reason: KWin resets the touch orientation every time an output's rotation changes, and with auto-rotate "Always" transient accelerometer readings while moving the laptop flipped the screen for a moment and broke touch. Both tools were superseded by duo-rotate and were removed.
+- The top digitizer is not rotated with its panel (raw coordinates match what the viewer sees), while compositors map touch in the panel's own scan-out frame: KWin turns its touches 180° together with the output transform.
+- **Fix (`touchscreen-hid`, since 2026-10-12)**: a udev rule gives the top touchscreen and pen `LIBINPUT_CALIBRATION_MATRIX=-1 0 1 0 -1 1` (180°) as libinput's default calibration. KWin applies calibration × per-device orientation, never resets the calibration and resets the orientation to 0 on every output change, so nothing has to be rewritten at run time; the resulting matrix is the one orientation 8 produced. The Ubuntu project for this laptop uses the same rule.
+- **Tried and replaced**:
+  - a KWin `CalibrationMatrix` in `kcminputrc` (`-1,0,0,1,0,-1,0,1,…`): the offsets were in the fourth column, but KWin passes only the first three columns of the first two rows to libinput, so every touch collapsed onto one point and calibration was wrongly written off;
+  - KWin per-device touch orientation `Orientation=8` plus mapping RAYD0001→eDP-1, RAYD0002→eDP-2, reapplied at each login (`tools/kde-touch-setup.sh`), and setting each output's auto-rotate policy to "InTabletMode" with a fixed rotation (`tools/duo-kscreen`, since `kscreen-doctor` cannot set this). Reason: KWin resets the touch orientation every time an output's rotation changes, and with auto-rotate "Always" transient accelerometer readings while moving the laptop flipped the screen for a moment and broke touch. Both tools were superseded by duo-rotate and were removed. duo-rotate then rewrote orientation 8 after every output change until that crashed KWin (3.2.4).
 
 #### 3.2.3 duo-rotate (`desktop-kde-duo`)
 
-KWin's auto-rotation does not suit this device: the panels are mounted 180° apart, KWin rotates every output in the same direction, does not reposition the panels, resets touch orientation on every rotation, and reacts immediately to every sensor reading.
+KWin's auto-rotation does not suit this device: the panels are mounted 180° apart, KWin rotates every output in the same direction, does not reposition the panels, and reacts immediately to every sensor reading.
 
 duo-rotate (`modules/desktop-kde-duo/src/duo-rotate.cpp`) is a Qt/libkscreen user service, installed by `desktop-kde-duo`:
 
 - while the keyboard is docked over USB (0b05:1cd7), the laptop layout is fixed and the bottom panel is turned off; when undocked, the iio-sensor-proxy orientation is applied once it has been stable for ≥1 s;
 - top = sensor orientation (inverted/none/left/right), bottom = top + 180°; panels are stacked vertically or side by side according to the hinge;
-- touch and pen mapping (top orientation 8, bottom 0) is reapplied after every layout change, whenever KWin re-adds an input device, and after every resume. On resume i2c-hid re-probes the touchscreens and KWin re-adds them with the default orientation without any output change, which left the top panel's touch 180° off (seen after s2idle tests on 2026-10-05);
+- touch and pen mapping (RAYD0001→eDP-1, RAYD0002→eDP-2) is checked at start, whenever KWin adds an input device (e.g. when i2c-hid re-probes the touchscreens on resume) and after every resume, and written only when wrong; KWin keeps it in `kcminputrc`. The top digitizer's 180° comes from the udev calibration (3.2.2). Until 2026-10-11 duo-rotate also rewrote KWin's per-device orientation 8 after every output change (3.2.4);
 - KWin's own auto-rotation is disabled (policy Never);
 - book mode: KScreen's Left/Right are RandR's 90°/270° counter-clockwise, so with the top panel at Left the hinge (its scan-out top edge) is on the right of the image and the bottom panel goes to the right (fixed 2026-10-06, it had been placed on the wrong side);
 - it also runs on the Plasma login screen (user `plasmalogin`, `plasma-login-wayland.target`), which otherwise kept its own output config with the top panel upside down. That user manager has no `WAYLAND_DISPLAY` (its KWin serves the default `wayland-0`), iio-sensor-proxy's policy only lets active user sessions claim the accelerometer (a polkit rule adds `plasmalogin`), and it cannot read the kernel log, so `zenbook-duo-boot-dock.service` records the docked-at-power-on state in `/run/zenbook-duo/docked-at-boot` at boot.
 
 Verified on hardware: laptop layout, upright (book) mode, touch, and the login screen (orientation, rotation, keyboard dock). Not yet implemented: posture detection from the hinge sensor.
+
+#### 3.2.4 KWin crash: touch settings saved from two threads (2026-10-12)
+
+- Symptom: at 02:07:38 a `kcminputrc` save failed (`Couldn't lock local file`), later saves timed out (`Failed to lock file …/kcminputrc.lock with error 1` at 02:08:23, 02:09:08 and 02:09:54), input stalled, and at 02:10:00 kwin_wayland died with SIGSEGV (general protection fault in `QLockFile::tryLock` → `QString::toLocal8Bit` on the `libinput-connection` thread). Applications without Wayland reconnect support (browsers, Thunderbird, terminals, Electron apps) died with it.
+- Core dump (KWin 6.7.5, KConfig 6.30, Qt 6.11.2): the libinput thread was handling a D-Bus property write from duo-rotate (`QMetaProperty::write` → `Device::setOrientation` → `KConfig::sync`); at the same moment the main thread ran an output change from a timer (`Workspace::applyOutputConfiguration` → `InputRedirection::updateScreens` → `Connection::applyScreenToDevice` → `Device::setOrientation(Qt::PrimaryOrientation)` → `KConfig::sync`) and was sleeping in `QLockFile::tryLock`. duo-rotate's write for the pen had been waiting for 26 s (logged at 02:09:34 for the touchscreen, at 02:10:01 for the pen), so the libinput thread, which also reads all input, was blocked for that long.
+- Cause: KWin moves each input `Device` to the libinput thread, so D-Bus writes run there, while `applyScreenToDevice()` calls the same setters from the main thread on every output change. Both save the one shared `kcminputrc` `KSharedConfig`, and the D-Bus path does not take the connection's mutex; KConfig is not thread-safe.
+- Trigger: KWin's automatic brightness (ambient light sensor) on eDP-1 applies an output configuration for every brightness step, several per minute in a dim room. Each step reset the top digitizer's orientation 8 → 0 (one `kcminputrc` save per device) and duo-rotate wrote 8 back 400 ms later (two more saves): 136–642 rewrites per boot, until one write overlapped an output change.
+- Fix: the udev calibration (3.2.2); duo-rotate no longer writes the orientation or reacts to output changes, and moves existing setups over once (orientation back to 0, the identity `CalibrationMatrix` that the old setup left in `kcminputrc` back to the default). Verified: over four automatic-brightness steps afterwards `kcminputrc` was not written, there were no lock warnings, and orientation 0 and the calibration stayed in place.
+- Upstream: KWin bug (D-Bus writes to `org.kde.KWin.InputDevice` properties race with output changes), to be reported.
 
 ### 3.3 Keyboard (`keyboard-hid-asus`)
 
@@ -256,7 +266,7 @@ Measured over 30 s idle on battery: `duo-rotate`, `zenbook-duo-profile-sync` and
 
 | Priority | Module / item | Status |
 |---|---|---|
-| P0 | `touchscreen-hid`: top touchscreen + pen | ✅ applied (after reboot) + kernel patch |
+| P0 | `touchscreen-hid`: top touchscreen + pen (driver, 180° calibration) | ✅ applied (after reboot) + kernel patch |
 | P0 | `audio-ghost-rt722`: audio on 7.2.x | ✅ applied (DKMS) |
 | P0 | `sensors-ish-firmware`: rotation / ALS / hinge | ✅ applied, works live |
 | P0 | `sensors-accel-mount`: accelerometer mount matrix | ✅ |
