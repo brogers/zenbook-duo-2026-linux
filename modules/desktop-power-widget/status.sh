@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# KDE only: checked by what is installed, since duo also runs from sudo and pacman hooks
+[[ -x /usr/bin/plasmashell ]] || { info "Plasma not installed: not applicable"; return 2; }
 rc=0
 if [[ -f /usr/lib/qt6/qml/org/zenbookduo/power/libzenbookduopowerplugin.so && -f /usr/share/plasma/plasmoids/org.zenbookduo.power/metadata.json ]]; then
 	ok "widget installed (add \"Zenbook Duo Power\" to a panel)"

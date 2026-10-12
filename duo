@@ -180,6 +180,18 @@ cmd_apply() {
 	else
 		ids=("$@")
 	fi
+	# Skip modules whose status check says they do not apply here (e.g. KDE modules without KDE)
+	local keep=() rc
+	for id in "${ids[@]}"; do
+		rc=0
+		module_status "$(find_module "$id")" || rc=$?
+		if ((rc == 2)) && [[ ${DUO_FORCE:-0} != 1 ]]; then
+			info "skipping $id: not applicable on this system (set DUO_FORCE=1 to apply anyway)"
+		else
+			keep+=("$id")
+		fi
+	done
+	ids=("${keep[@]}")
 	((${#ids[@]})) || die "nothing to apply (see: ./duo list)"
 	log "modules to apply: ${ids[*]}"
 	snapshot "before apply ${ids[*]}"
