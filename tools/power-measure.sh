@@ -11,7 +11,9 @@ s0=$(cat /sys/kernel/debug/pmc_core/slp_s0_residency_usec)
 ts="$(turbostat --quiet --Summary --show PkgWatt,Pk%pc10,Busy% --interval "$secs" --num_iterations 1 2>/dev/null | tail -1)"
 e1=$(cat $bat/energy_now)
 s1=$(cat /sys/kernel/debug/pmc_core/slp_s0_residency_usec)
-echo "battery power_now: $(awk '{printf "%.2f W", $1/1e6}' $bat/power_now)"
-echo "battery avg over ${secs}s: $(awk -v a="$e0" -v b="$e1" -v s="$secs" 'BEGIN{printf "%.2f W", (a-b)/1e6*3600/s}') (energy_now resolution is coarse; use >=60s)"
+# power_now and energy_now are current/charge x the DESIGN voltage on this model: rescale to the real voltage
+v="$(awk -v n="$(cat $bat/voltage_now)" -v d="$(cat $bat/voltage_min_design)" 'BEGIN{printf "%.4f", n/d}')"
+echo "battery power_now: $(awk -v v="$v" '{printf "%.2f W", $1/1e6*v}' $bat/power_now) (voltage-corrected)"
+echo "battery avg over ${secs}s: $(awk -v a="$e0" -v b="$e1" -v s="$secs" -v v="$v" 'BEGIN{printf "%.2f W", (a-b)/1e6*3600/s*v}') (energy_now resolution is coarse; use >=60s)"
 echo "turbostat (Busy% Pk%pc10 PkgWatt): $ts"
 echo "S0ix (slp_s0) residency: $(( (s1-s0)/10000/secs ))%"

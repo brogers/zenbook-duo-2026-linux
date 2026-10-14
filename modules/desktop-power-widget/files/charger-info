@@ -1,0 +1,82 @@
+#!/bin/bash
+# zenbook-duo-2026-linux (desktop-power-widget): publish the USB-C charger's power contract in
+# /run/zenbook-duo/charger for the power widget. Runs from udev on power supply changes.
+#
+# The EC's UCSI does not advertise PDO details, so the kernel leaves voltage_now/max of
+# ucsi-source-psy-* at 0 and nothing tells a 40 W charger from a 100 W one. Two UCSI
+# commands through debugfs give the contract: GET_CONNECTOR_STATUS (power direction,
+# operation mode, request data object, charging-rate status) and GET_PDOS for the source
+# PDO the laptop requested (its voltage). Both are read-only queries.
+set -u
+out=/run/zenbook-duo/charger
+mkdir -p /run/zenbook-duo
+exec 9>/run/zenbook-duo/charger.lock
+flock -w 5 9 || exit 0
+
+dir=
+for d in /sys/kernel/debug/usb/ucsi/*/; do [[ -w $d/command ]] && dir=$d && break; done
+[[ -n $dir ]] || exit 0
+
+# ucsi CMD: run a UCSI command, sets lo/hi to the low/high 64 bits of its response
+ucsi() {
+	local r
+	echo "$1" >"$dir/command" 2>/dev/null || return 1
+	r=$(cat "$dir/response" 2>/dev/null) || return 1
+	[[ $r =~ ^0x[0-9a-f]{32}$ ]] || return 1
+	hi=$((16#${r:2:16}))
+	lo=$((16#${r:18:16}))
+}
+
+result() {
+	local tmp
+	tmp=$(mktemp /run/zenbook-duo/.charger.XXXXXX) || exit 0
+	printf '%s\n' "$@" >"$tmp"
+	chmod 0644 "$tmp"
+	mv -f "$tmp" "$out"
+	exit 0
+}
+
+ucsi 0x6 || exit 0 # GET_CAPABILITY
+ports=$(((lo >> 32) & 0xff))
+for ((try = 0; try < 4; try++)); do
+	for ((c = 1; c <= ports; c++)); do
+		ucsi $((0x12 | c << 16)) || continue # GET_CONNECTOR_STATUS
+		(((lo >> 19) & 1)) || continue       # connected
+		(((lo >> 20) & 1)) && continue       # we are the source here, not the sink
+		opmode=$(((lo >> 16) & 7))
+		slow=$(((hi & 3) >= 2 ? 1 : 0)) # charging-rate status: slow or trickle
+		mv=0 ma=0
+		case $opmode in
+		3) # USB Power Delivery
+			rdo=$(((lo >> 32) & 0xffffffff))
+			pos=$(((rdo >> 28) & 0xf))
+			((pos)) || continue
+			# GET_PDOS: partner, source capabilities, the requested PDO only
+			ucsi $((0x10 | c << 16 | 1 << 23 | (pos - 1) << 24 | 1 << 34)) || continue
+			pdo=$((lo & 0xffffffff))
+			if (((pdo >> 30) == 0)); then # fixed supply
+				mv=$((((pdo >> 10) & 0x3ff) * 50))
+				ma=$((((rdo >> 10) & 0x3ff) * 10))
+			elif (((pdo >> 28) == 12)); then # programmable power supply
+				mv=$((((rdo >> 9) & 0xfff) * 20))
+				ma=$(((rdo & 0x7f) * 50))
+			fi
+			;;
+		5) mv=5000 ma=3000 ;; # Type-C current 3.0 A
+		4) mv=5000 ma=1500 ;; # Type-C current 1.5 A
+		2) mv=5000 ma=1500 ;; # BC 1.2
+		1) mv=5000 ma=500 ;;  # default USB
+		esac
+		# PD negotiation still running: ask again
+		((opmode == 3 && mv == 0)) && continue
+		mw=$((mv * ma / 1000))
+		printf -v w '%d.%d' $((mw / 1000)) $(((mw % 1000) / 100))
+		printf -v v '%d.%02d' $((mv / 1000)) $(((mv % 1000) / 10))
+		printf -v a '%d.%02d' $((ma / 1000)) $(((ma % 1000) / 10))
+		result "port=$c" "watts=$w" "volts=$v" "amps=$a" "slow=$slow"
+	done
+	# an unplug, or a contract that is not there yet right after plugging in
+	[[ $(cat /sys/class/power_supply/AC0/online 2>/dev/null) == 1 ]] || break
+	sleep 1
+done
+result "port=0" "watts=0"

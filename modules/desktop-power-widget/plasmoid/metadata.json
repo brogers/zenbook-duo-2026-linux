@@ -2,12 +2,12 @@
     "KPlugin": {
         "Authors": [{ "Name": "zenbook-duo-2026-linux" }],
         "Category": "System Information",
-        "Description": "Live power draw of the Zenbook Duo with a breakdown, temperatures, fans and power profile",
+        "Description": "What the Zenbook Duo draws, on battery and plugged in, the charging rate, a breakdown, temperatures, fans and power profile",
         "Icon": "battery-profile-performance",
         "Id": "org.zenbookduo.power",
         "License": "GPL-2.0-only",
         "Name": "Zenbook Duo Power",
-        "Version": "1.0",
+        "Version": "1.1",
         "Website": "https://github.com/burakgon/zenbook-duo-2026-linux"
     },
     "KPackageStructure": "Plasma/Applet",
