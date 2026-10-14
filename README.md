@@ -108,6 +108,7 @@ Measured on a UX8407AA with BIOS 310, `linux-cachyos` 7.2.9 and KDE Plasma 6.7.
 | **Sustained performance** | No one runs Intel DTT: power limits stay at the firmware default, PL1 20 W / PL2 30 W. | Windows' own DTT tables per profile: balanced PL1 28→42 W / PL2 55 W, performance PL1 55 W / PL2 64 W. | `power-dtt` |
 | **Power saver** | KDE's "Power Save" leaves the firmware in balanced: neither ASUS quiet nor the Intel low-power slider survives the shared `platform_profile` list. Switching straight from Performance snaps back to Balanced within a second. | Power Save = ASUS quiet fans + SoC low-power + Xe GPU power saving (Windows "Whisper": PL1 20–30 W). Every switch sticks. | `power-profile-sync` |
 | **Wi-Fi latency** (BE201) | Power save always on: 16 ms average to the router, spikes to 158 ms. | On AC: 7 ms, no spikes. On battery: power save stays on. | `wifi-powersave-ac` |
+| **Wi-Fi roaming** (WPA3, Wi-Fi 7 mesh) | mac80211 leaves the old AP without a deauthentication; with PMF the AP blocks the new association for about a second, but Linux gives up after 300 ms. On a TP-Link Deco every 5 → 6 GHz move on the same unit timed out (10 of 10) and the laptop fell back to a distant node. | The old AP is told that the laptop leaves; the same roams finish on the first try in ~70 ms. | `wifi-roam-deauth` |
 | **Idle power** | Several PCI devices ship with runtime PM disabled; the fTPM is polled as an entropy source. | Runtime PM on (sensor hub, Wi-Fi and NVMe excluded on purpose), fTPM left alone. Idle package power 0.66–0.79 W. | `power-runtime-pm`, `power-tpm-rng` |
 
 Works without this repo: suspend (s2idle, ~0.9% battery per hour lid closed), the bottom touchscreen and pen, Wi-Fi 7 (6 GHz / 320 MHz, 2.9 Gbit/s link), Bluetooth, the webcam and IR camera, NPU, GPU compute and video decode/encode.
@@ -174,6 +175,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `power-runtime-pm` | udev: runtime PM for PCI devices that ship without it | all |
 | `power-tpm-rng` | udev: fTPM not used as a hardware RNG | all |
 | `wifi-powersave-ac` | udev + NetworkManager dispatcher: Wi-Fi power save follows AC | all |
+| `wifi-roam-deauth` | DKMS `mac80211` that deauthenticates from the AP it leaves when roaming with PMF, built from the running kernel's own sources | 7.x |
 | `desktop-power-widget` | KDE panel widget: live power draw (RAPL psys, also on AC), charging rate, USB-C charger contract (udev helper), breakdown, temperatures, fans, power mode | KDE Plasma |
 | `system-health` | pacman hook after kernel updates + one check per login; notifies only when a fix is not active | all |
 
@@ -238,6 +240,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | Panel Replay Early Transport ghost cursor | to be reported to drm/xe |
 | Bottom panel after a docked power-on (TCSS power for Port B) | [xe #9196](https://gitlab.freedesktop.org/drm/xe/kernel/-/issues/9196); [RFC sent to intel-gfx / intel-xe](https://lore.kernel.org/all/20261006-ptl-port-b-tcss-v1-1-240670342cd3@gmail.com/) on 2026-10-06, carried as DKMS in `display-edp2-tcss` |
 | `hid-asus` Zenbook Duo keyboard support | to be submitted |
+| mac80211: deauthenticate from the old AP when roaming with MFP | to be sent to linux-wireless, carried as DKMS in `wifi-roam-deauth` |
 | Keyboard touchpad palm rejection (libinput quirk) | to be submitted to libinput |
 | HDR (DisplayID 2.0 HDR metadata) | fixed in libdisplay-info 0.4.0; Arch packaging update pending |
 | KDE: one backlight per built-in panel | KDE bug 525717 |
@@ -252,6 +255,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | `audio-ghost-rt722` | DKMS, rebuilt on every kernel update | n/a (fixed upstream) | n/a |
 | `keyboard-hid-asus` | DKMS (7.2 source) | DKMS (7.3 source) | needs a new source until upstream |
 | `display-edp2-tcss` | DKMS (kernel's own source + patch) | DKMS | DKMS, as long as the patch applies |
+| `wifi-roam-deauth` | DKMS (kernel's own source + patch) | DKMS | DKMS, as long as the patch applies |
 | everything else | ✅ | ✅ | ✅ |
 
 `./duo status` after a kernel update tells you whether every fix is still active.
@@ -263,7 +267,7 @@ Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian,
 <details>
 <summary><b>Do I have to rebuild the kernel?</b></summary>
 
-No. Three modules use DKMS (`audio-ghost-rt722` on 7.2.x only, `keyboard-hid-asus`, `display-edp2-tcss`), which rebuilds them automatically on kernel updates. `display-edp2-tcss` downloads the running kernel's own graphics driver sources (a few MB) for each build. Everything else is configuration.
+No. Four modules use DKMS (`audio-ghost-rt722` on 7.2.x only, `keyboard-hid-asus`, `display-edp2-tcss`, `wifi-roam-deauth`), which rebuilds them automatically on kernel updates. `display-edp2-tcss` and `wifi-roam-deauth` download the running kernel's own graphics driver or mac80211 sources (a few MB) for each build. Everything else is configuration.
 </details>
 
 <details>

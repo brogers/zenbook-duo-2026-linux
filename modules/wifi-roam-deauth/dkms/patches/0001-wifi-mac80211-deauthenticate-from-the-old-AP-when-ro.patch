@@ -1,0 +1,86 @@
+From b22c0e512edc21702b87b0ae8fb1c916be2d96b7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Burak=20G=C3=B6nc=C3=BC?= <burakgon12@gmail.com>
+Date: Thu, 15 Oct 2026 00:30:00 +0300
+Subject: [PATCH 1/2] wifi: mac80211: deauthenticate from the old AP when
+ roaming with MFP
+
+When userspace starts authentication with a new AP while we are still
+associated, mac80211 drops the association locally and does not tell
+the AP. With management frame protection the AP still holds a protected
+association with us. An AP in that state has to treat a (re)association
+from us as possibly forged: it refuses it temporarily and first checks
+the old association with an SA Query, which we no longer answer. The new
+association can then only succeed once the SA Query has timed out (1000
+TU by default), but we give up after three (re)association attempts
+100 ms apart.
+
+This hits every roam to an AP that shares the old AP's state, for
+example between the AP MLDs of an AP that runs one single-link AP MLD
+per band and steers clients between them with BSS transition
+management, and every reassociation with the current AP. With a TP-Link
+Deco BE65/BE85 mesh (Qualcomm) and an Intel BE201 (iwlmld), each of ten
+roams between the 5 GHz and the 6 GHz AP MLD of the same unit over nine
+days timed out: the AP acknowledged all three Reassociation Request
+frames and answered none, then deauthenticated us with reason 9 when we
+fell back to the old AP MLD. Reassociating with the current AP got
+reason 9 right away. A Reassociation Request sent 1 s after the first
+one was accepted at once; one sent after 500 ms was still ignored.
+
+Send the Deauthentication frame when MFP is in use. The AP then drops
+the old association at once, and the same roams completed with the
+first Reassociation Request, answered within 75 ms.
+
+Assisted-by: LLM
+---
+ net/mac80211/mlme.c | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index 1b9d272..15f015b 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -9986,13 +9986,19 @@ int ieee80211_mgd_auth(struct ieee80211_sub_if_data *sdata,
+ 
+ 	if (ifmgd->associated) {
+ 		u8 frame_buf[IEEE80211_DEAUTH_FRAME_LEN];
++		/*
++		 * With MFP the AP protects our association and may not
++		 * accept a new (re)association from us until an SA Query
++		 * on the old one times out, so tell it that we leave.
++		 */
++		bool tx = ifmgd->flags & IEEE80211_STA_MFP_ENABLED;
+ 
+ 		sdata_info(sdata,
+ 			   "disconnect from AP %pM for new auth to %pM\n",
+ 			   sdata->vif.cfg.ap_addr, auth_data->ap_addr);
+ 		ieee80211_set_disassoc(sdata, IEEE80211_STYPE_DEAUTH,
+ 				       WLAN_REASON_UNSPECIFIED,
+-				       false, frame_buf);
++				       tx, frame_buf);
+ 
+ 		ieee80211_report_disconnect(sdata, frame_buf,
+ 					    sizeof(frame_buf), true,
+@@ -10339,13 +10345,19 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
+ 
+ 	if (ifmgd->associated) {
+ 		u8 frame_buf[IEEE80211_DEAUTH_FRAME_LEN];
++		/*
++		 * With MFP the AP protects our association and may not
++		 * accept a new (re)association from us until an SA Query
++		 * on the old one times out, so tell it that we leave.
++		 */
++		bool tx = ifmgd->flags & IEEE80211_STA_MFP_ENABLED;
+ 
+ 		sdata_info(sdata,
+ 			   "disconnect from AP %pM for new assoc to %pM\n",
+ 			   sdata->vif.cfg.ap_addr, assoc_data->ap_addr);
+ 		ieee80211_set_disassoc(sdata, IEEE80211_STYPE_DEAUTH,
+ 				       WLAN_REASON_UNSPECIFIED,
+-				       false, frame_buf);
++				       tx, frame_buf);
+ 
+ 		ieee80211_report_disconnect(sdata, frame_buf,
+ 					    sizeof(frame_buf), true,
+-- 
+2.56.0
+
