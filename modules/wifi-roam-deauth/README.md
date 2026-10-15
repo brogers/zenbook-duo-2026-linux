@@ -13,7 +13,7 @@ Makes Wi-Fi roaming work on WPA3 networks whose access points keep state across 
   - The punktfunk stream dropped to 17–37 fps on every such roam, and round trip p95 rose from ~8 ms to ~25 ms on the fallback node.
 
 ## What it changes
-- `dkms/patches/0001-…` is the upstream patch: when PMF is in use, mac80211 transmits the Deauthentication frame to the AP it leaves. That covers WPA3, every 6 GHz network and every MLO connection. Without PMF nothing changes. With the deauthentication the Deco drops the old association at once, and roams finish with the first Reassociation Request, answered within 75 ms.
+- `dkms/patches/0001-…` is the upstream patch ([sent to linux-wireless](https://lore.kernel.org/all/20261015-mac80211-roam-mfp-deauth-v1-1-9ccc69b434fd@gmail.com/) on 2026-10-15): when PMF is in use, mac80211 transmits the Deauthentication frame to the AP it leaves. That covers WPA3, every 6 GHz network and every MLO connection. Without PMF nothing changes. With the deauthentication the Deco drops the old association at once, and roams finish with the first Reassociation Request, answered within 75 ms.
 - `0002-…` only adds the `zenbook_duo_roam_deauth` module parameter: a runtime off switch, and the marker `status.sh` looks for. It is not part of the upstream submission.
 - `dkms/build.sh` builds a patched `mac80211.ko` with DKMS for every installed 7.x kernel (`zenbook-duo-mac80211`, installed to `/usr/lib/modules/<kernel>/updates/dkms/`).
   - It uses the `net/mac80211` sources of the exact kernel being built for, taken from a sparse clone of the tree the kernel package was built from. The clone is cached in `/var/cache/zenbook-duo/mac80211-src`.

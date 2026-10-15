@@ -240,7 +240,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | Panel Replay Early Transport ghost cursor | to be reported to drm/xe |
 | Bottom panel after a docked power-on (TCSS power for Port B) | [xe #9196](https://gitlab.freedesktop.org/drm/xe/kernel/-/issues/9196); [RFC](https://lore.kernel.org/all/20261006-ptl-port-b-tcss-v1-1-240670342cd3@gmail.com/) on 2026-10-06, [v2](https://lore.kernel.org/all/20261015-ptl-port-b-tcss-v2-0-e00ce882402d@gmail.com/) to intel-gfx / intel-xe on 2026-10-15, carried as DKMS in `display-edp2-tcss` |
 | `hid-asus` Zenbook Duo keyboard support | to be submitted |
-| mac80211: deauthenticate from the old AP when roaming with MFP | to be sent to linux-wireless, carried as DKMS in `wifi-roam-deauth` |
+| mac80211: deauthenticate from the old AP when roaming with MFP | [sent to linux-wireless](https://lore.kernel.org/all/20261015-mac80211-roam-mfp-deauth-v1-1-9ccc69b434fd@gmail.com/) on 2026-10-15, carried as DKMS in `wifi-roam-deauth` |
 | Keyboard touchpad palm rejection (libinput quirk) | to be submitted to libinput |
 | HDR (DisplayID 2.0 HDR metadata) | fixed in libdisplay-info 0.4.0; Arch packaging update pending |
 | KDE: one backlight per built-in panel | KDE bug 525717 |
