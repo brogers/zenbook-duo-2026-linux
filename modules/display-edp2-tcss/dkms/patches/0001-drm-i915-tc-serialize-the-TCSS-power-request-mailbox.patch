@@ -1,0 +1,91 @@
+From fd70afbbc1511807d4ae837ba32f3ba1233f9456 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Burak=20G=C3=B6nc=C3=BC?= <burakgon12@gmail.com>
+Date: Thu, 15 Oct 2026 00:56:27 +0300
+Subject: [PATCH 1/3] drm/i915/tc: serialize the TCSS power request mailbox
+
+xelpdp_tc_power_request_wa() (Wa_14020908590) drives the TCSS mailbox,
+which is shared by all ports: it waits for the mailbox to be idle,
+writes TCSS_DISP_MAILBOX_IN_DATA and TCSS_DISP_MAILBOX_IN_CMD, and waits
+for the command to finish. Its callers hold only their own TC port's
+lock, so two TC ports enabling or disabling TCSS power at the same time
+can interleave these steps and run one port's command with the other
+port's data.
+
+Serialize the sequence with a display-wide mutex. The next patch adds a
+caller outside of the TC port code.
+
+Assisted-by: LLM
+---
+ drivers/gpu/drm/i915/display/intel_display_core.h   |  5 +++++
+ drivers/gpu/drm/i915/display/intel_display_driver.c |  1 +
+ drivers/gpu/drm/i915/display/intel_tc.c             | 12 ++++++++----
+ 3 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_core.h b/drivers/gpu/drm/i915/display/intel_display_core.h
+index c80b4a2f7..dc1df97d8 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_core.h
++++ b/drivers/gpu/drm/i915/display/intel_display_core.h
+@@ -623,6 +623,11 @@ struct intel_display {
+ 		u32 bxt_phy_grc;
+ 	} state;
+ 
++	struct {
++		/* serializes the TCSS mailbox of Wa_14020908590 */
++		struct mutex mailbox_lock;
++	} tc;
++
+ 	struct {
+ 		unsigned int hpll_freq;
+ 		unsigned int czclk_freq;
+diff --git a/drivers/gpu/drm/i915/display/intel_display_driver.c b/drivers/gpu/drm/i915/display/intel_display_driver.c
+index 70d112fd4..e1b445305 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_driver.c
++++ b/drivers/gpu/drm/i915/display/intel_display_driver.c
+@@ -187,6 +187,7 @@ void intel_display_driver_early_probe(struct intel_display *display)
+ 	mutex_init(&display->wm.wm_mutex);
+ 	mutex_init(&display->pps.mutex);
+ 	mutex_init(&display->hdcp.hdcp_mutex);
++	mutex_init(&display->tc.mailbox_lock);
+ 
+ 	intel_display_irq_init(display);
+ 	intel_dkl_phy_init(display);
+diff --git a/drivers/gpu/drm/i915/display/intel_tc.c b/drivers/gpu/drm/i915/display/intel_tc.c
+index f2d86b29c..9285e70ef 100644
+--- a/drivers/gpu/drm/i915/display/intel_tc.c
++++ b/drivers/gpu/drm/i915/display/intel_tc.c
+@@ -1068,12 +1068,15 @@ xelpdp_tc_phy_wait_for_tcss_power(struct intel_tc_port *tc, bool enabled)
+  */
+ static void xelpdp_tc_power_request_wa(struct intel_display *display, bool enable)
+ {
++	/* the mailbox is shared by all ports, keep their commands apart */
++	mutex_lock(&display->tc.mailbox_lock);
++
+ 	/* check if mailbox is running busy */
+ 	if (intel_de_wait_for_clear_ms(display, TCSS_DISP_MAILBOX_IN_CMD,
+ 				       TCSS_DISP_MAILBOX_IN_CMD_RUN_BUSY, 10)) {
+ 		drm_dbg_kms(display->drm,
+ 			    "Timeout waiting for TCSS mailbox run/busy bit to clear\n");
+-		return;
++		goto out_unlock;
+ 	}
+ 
+ 	intel_de_write(display, TCSS_DISP_MAILBOX_IN_DATA, enable ? 1 : 0);
+@@ -1083,11 +1086,12 @@ static void xelpdp_tc_power_request_wa(struct intel_display *display, bool enabl
+ 
+ 	/* wait to clear mailbox running busy bit before continuing */
+ 	if (intel_de_wait_for_clear_ms(display, TCSS_DISP_MAILBOX_IN_CMD,
+-				       TCSS_DISP_MAILBOX_IN_CMD_RUN_BUSY, 10)) {
++				       TCSS_DISP_MAILBOX_IN_CMD_RUN_BUSY, 10))
+ 		drm_dbg_kms(display->drm,
+ 			    "Timeout after writing data to mailbox. Mailbox run/busy bit did not clear\n");
+-		return;
+-	}
++
++out_unlock:
++	mutex_unlock(&display->tc.mailbox_lock);
+ }
+ 
+ static void __xelpdp_tc_phy_enable_tcss_power(struct intel_tc_port *tc, bool enable)
+-- 
+2.56.0
+

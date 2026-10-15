@@ -1,0 +1,53 @@
+From c3ef73e2fe59f50b386d5a641a212d698facc471 Mon Sep 17 00:00:00 2001
+From: burakgon <burakgon12@gmail.com>
+Date: Thu, 15 Oct 2026 00:31:00 +0300
+Subject: [PATCH 2/2] zenbook-duo-linux: module parameter for the roaming
+ deauthentication (not for upstream)
+
+mac80211.zenbook_duo_roam_deauth=0 turns the change off without a reboot,
+and its sysfs file tells wifi-roam-deauth that the patched mac80211 is
+running.
+---
+ net/mac80211/mlme.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index 15f015b..02da0c5 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -45,6 +45,12 @@
+ #define IEEE80211_ASSOC_TIMEOUT_SHORT	(HZ / 10)
+ #define IEEE80211_ASSOC_MAX_TRIES	3
+ 
++/* zenbook-duo-linux: runtime switch for the roaming deauthentication */
++static bool zenbook_duo_roam_deauth = true;
++module_param(zenbook_duo_roam_deauth, bool, 0644);
++MODULE_PARM_DESC(zenbook_duo_roam_deauth,
++		 "Deauthenticate from the old AP when roaming with MFP (default: true)");
++
+ #define IEEE80211_ADV_TTLM_SAFETY_BUFFER_MS (100 * USEC_PER_MSEC)
+ #define IEEE80211_ADV_TTLM_ST_UNDERFLOW 0xff00
+ 
+@@ -9991,7 +9997,8 @@ int ieee80211_mgd_auth(struct ieee80211_sub_if_data *sdata,
+ 		 * accept a new (re)association from us until an SA Query
+ 		 * on the old one times out, so tell it that we leave.
+ 		 */
+-		bool tx = ifmgd->flags & IEEE80211_STA_MFP_ENABLED;
++		bool tx = zenbook_duo_roam_deauth &&
++			  (ifmgd->flags & IEEE80211_STA_MFP_ENABLED);
+ 
+ 		sdata_info(sdata,
+ 			   "disconnect from AP %pM for new auth to %pM\n",
+@@ -10350,7 +10357,8 @@ int ieee80211_mgd_assoc(struct ieee80211_sub_if_data *sdata,
+ 		 * accept a new (re)association from us until an SA Query
+ 		 * on the old one times out, so tell it that we leave.
+ 		 */
+-		bool tx = ifmgd->flags & IEEE80211_STA_MFP_ENABLED;
++		bool tx = zenbook_duo_roam_deauth &&
++			  (ifmgd->flags & IEEE80211_STA_MFP_ENABLED);
+ 
+ 		sdata_info(sdata,
+ 			   "disconnect from AP %pM for new assoc to %pM\n",
+-- 
+2.56.0
+

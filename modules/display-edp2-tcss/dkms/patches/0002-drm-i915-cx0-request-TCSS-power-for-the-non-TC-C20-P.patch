@@ -1,7 +1,7 @@
-From 56ec3e9638b1577eda992687646f73f8ba551ede Mon Sep 17 00:00:00 2001
+From 013461327412710eb4b8aaa2c30b78542e90366d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Burak=20G=C3=B6nc=C3=BC?= <burakgon12@gmail.com>
 Date: Tue, 6 Oct 2026 22:08:58 +0300
-Subject: [PATCH 1/2] drm/i915/cx0: request TCSS power for the non-TC C20 PHY
+Subject: [PATCH 2/3] drm/i915/cx0: request TCSS power for the non-TC C20 PHY
  on PTL port B
 
 On PTL, port B is driven by a C20 PHY that sits in the Type-C subsystem,
@@ -31,8 +31,9 @@ clock control reaches 0xf0008400 too and the panel comes up.
 
 Request TCSS power, including the PTL mailbox handshake the TC code
 uses (Wa_14020908590), before programming the PLL of a non-TC C20 PHY on
-PTL, wait for the acknowledgment, and release the request once the PLL
-is disabled, mirroring what the TC PHY code does for TC ports.
+PTL, and release the request once the PLL is disabled. Wait for the
+TCSS power state to follow the request in both directions, as the TC
+PHY code does for TC ports.
 
 The failure and the TCSS power request as its fix were first identified
 by the zenbook-duo26-Ubuntu26.04 project.
@@ -41,16 +42,16 @@ Closes: https://gitlab.freedesktop.org/drm/xe/kernel/-/issues/9196
 Link: https://github.com/therealarnold666/zenbook-duo26-Ubuntu26.04
 Assisted-by: LLM
 ---
- drivers/gpu/drm/i915/display/intel_cx0_phy.c | 36 ++++++++++++++++++++
- drivers/gpu/drm/i915/display/intel_tc.c      | 23 +++++++++++++
+ drivers/gpu/drm/i915/display/intel_cx0_phy.c | 37 ++++++++++++++++++++
+ drivers/gpu/drm/i915/display/intel_tc.c      | 23 ++++++++++++
  drivers/gpu/drm/i915/display/intel_tc.h      |  1 +
- 3 files changed, 60 insertions(+)
+ 3 files changed, 61 insertions(+)
 
 diff --git a/drivers/gpu/drm/i915/display/intel_cx0_phy.c b/drivers/gpu/drm/i915/display/intel_cx0_phy.c
-index 24a51ab..a0f43f5 100644
+index b83f0afaa..d4a9da843 100644
 --- a/drivers/gpu/drm/i915/display/intel_cx0_phy.c
 +++ b/drivers/gpu/drm/i915/display/intel_cx0_phy.c
-@@ -52,6 +52,35 @@ bool intel_encoder_is_c10phy(struct intel_encoder *encoder)
+@@ -54,6 +54,36 @@ bool intel_encoder_is_c10phy(struct intel_encoder *encoder)
  	return false;
  }
  
@@ -76,17 +77,18 @@ index 24a51ab..a0f43f5 100644
 +
 +	intel_tc_request_tcss_power(encoder, enable);
 +
-+	if (enable &&
-+	    intel_de_wait_for_set_ms(display, XELPDP_PORT_BUF_CTL1(display, encoder->port),
-+				     XELPDP_TCSS_POWER_STATE, 5))
-+		drm_warn(display->drm, "Port %c: TCSS power request not acknowledged\n",
-+			 port_name(encoder->port));
++	/* Like the TC PHY code, wait for the power state in both directions. */
++	if (intel_de_wait_ms(display, XELPDP_PORT_BUF_CTL1(display, encoder->port),
++			     XELPDP_TCSS_POWER_STATE,
++			     enable ? XELPDP_TCSS_POWER_STATE : 0, 5, NULL))
++		drm_warn(display->drm, "Port %c: TCSS power %s not acknowledged\n",
++			 port_name(encoder->port), enable ? "request" : "release");
 +}
 +
  static int lane_mask_to_lane(u8 lane_mask)
  {
  	if (WARN_ON((lane_mask & ~INTEL_CX0_BOTH_LANES) ||
-@@ -3189,6 +3218,10 @@ static void intel_cx0pll_enable(struct intel_encoder *encoder,
+@@ -3191,6 +3221,10 @@ static void intel_cx0pll_enable(struct intel_encoder *encoder,
  	 */
  	drm_WARN_ON(display->drm, lane_reversal && intel_tc_port_in_dp_alt_mode(dig_port));
  
@@ -97,7 +99,7 @@ index 24a51ab..a0f43f5 100644
  	/*
  	 * 1. Program PORT_CLOCK_CTL REGISTER to configure
  	 * clock muxes, gating and SSC
-@@ -3523,6 +3556,9 @@ static void intel_cx0pll_disable(struct intel_encoder *encoder)
+@@ -3536,6 +3570,9 @@ static void intel_cx0pll_disable(struct intel_encoder *encoder)
  	intel_de_rmw(display, XELPDP_PORT_CLOCK_CTL(display, encoder->port),
  		     XELPDP_FORWARD_CLOCK_UNGATE, 0);
  
@@ -108,11 +110,11 @@ index 24a51ab..a0f43f5 100644
  }
  
 diff --git a/drivers/gpu/drm/i915/display/intel_tc.c b/drivers/gpu/drm/i915/display/intel_tc.c
-index f2d86b2..2a8665d 100644
+index 9285e70ef..baca7dac5 100644
 --- a/drivers/gpu/drm/i915/display/intel_tc.c
 +++ b/drivers/gpu/drm/i915/display/intel_tc.c
-@@ -1090,6 +1090,29 @@ static void xelpdp_tc_power_request_wa(struct intel_display *display, bool enabl
- 	}
+@@ -1094,6 +1094,29 @@ static void xelpdp_tc_power_request_wa(struct intel_display *display, bool enabl
+ 	mutex_unlock(&display->tc.mailbox_lock);
  }
  
 +/**
@@ -142,7 +144,7 @@ index f2d86b2..2a8665d 100644
  {
  	struct intel_display *display = to_intel_display(tc->dig_port);
 diff --git a/drivers/gpu/drm/i915/display/intel_tc.h b/drivers/gpu/drm/i915/display/intel_tc.h
-index 6719aea..b49a5b5 100644
+index 6719aea5b..b49a5b5c5 100644
 --- a/drivers/gpu/drm/i915/display/intel_tc.h
 +++ b/drivers/gpu/drm/i915/display/intel_tc.h
 @@ -88,6 +88,7 @@ bool intel_tc_port_in_legacy_mode(struct intel_digital_port *dig_port);

@@ -1,0 +1,3 @@
+# zenbook-duo-2026-linux (desktop-power-widget): publish the USB-C charger's power contract
+# in /run/zenbook-duo/charger whenever a charger is plugged in, renegotiated or unplugged.
+SUBSYSTEM=="power_supply", KERNEL=="AC0|ucsi-source-psy-*", RUN+="/usr/lib/zenbook-duo/charger-info"
