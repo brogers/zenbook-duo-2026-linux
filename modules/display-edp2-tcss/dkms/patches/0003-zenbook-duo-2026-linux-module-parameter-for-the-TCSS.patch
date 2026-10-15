@@ -1,7 +1,7 @@
 From 67a10042c0225f36a577b75df48b942ba301b114 Mon Sep 17 00:00:00 2001
 From: burakgon <burakgon12@gmail.com>
 Date: Tue, 6 Oct 2026 22:09:46 +0300
-Subject: [PATCH 2/2] zenbook-duo-2026-linux: module parameter for the TCSS
+Subject: [PATCH 3/3] zenbook-duo-2026-linux: module parameter for the TCSS
  change (not for upstream)
 
 xe.zenbook_duo_edp2_tcss=0 turns the change off for a boot, and its sysfs
