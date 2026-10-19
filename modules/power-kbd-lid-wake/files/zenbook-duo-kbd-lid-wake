@@ -1,0 +1,29 @@
+#!/bin/sh
+# zenbook-duo-2026-linux (power-kbd-lid-wake): with the lid closed, the keyboard docked
+# on the bottom screen (USB 0b05:1cd7) must not wake the laptop. It keeps sending USB
+# remote wakeups under the closed lid, and KDE puts the laptop back to sleep each time:
+# a wake/suspend loop that drains the battery. Turn its wakeup off before a suspend
+# with the lid closed and back on after resume, so a key press still wakes the laptop
+# while the lid is open. Called by systemd-sleep with "pre|post" and the sleep type.
+list=/run/zenbook-duo/kbd-wake-disabled
+
+case "$1" in
+pre)
+	grep -qs closed /proc/acpi/button/lid/*/state || exit 0
+	mkdir -p /run/zenbook-duo
+	: >"$list"
+	for d in /sys/bus/usb/devices/*; do
+		[ "$(cat "$d/idVendor" 2>/dev/null):$(cat "$d/idProduct" 2>/dev/null)" = 0b05:1cd7 ] || continue
+		[ "$(cat "$d/power/wakeup" 2>/dev/null)" = enabled ] || continue
+		echo disabled >"$d/power/wakeup" && echo "$d" >>"$list"
+	done
+	;;
+post)
+	[ -f "$list" ] || exit 0
+	while read -r d; do
+		[ -w "$d/power/wakeup" ] && echo enabled >"$d/power/wakeup"
+	done <"$list"
+	rm -f "$list"
+	;;
+esac
+exit 0

@@ -25,6 +25,7 @@ one command fixes them, one command undoes it.
 | 🔊 **Speakers, microphones, headphones** | ❌ no sound on kernel 7.2 | ✅ works, with ASUS speaker tuning |
 | 🔄 **Auto-rotate and the two-screen layout** | ❌ upside down, touch breaks | ✅ follows how you hold it |
 | ⌨️ **Keyboard lying on the bottom screen** | ⚠️ bottom screen stays on | ✅ turns off, back on when lifted |
+| 😴 **Lid closed over the keyboard** | ❌ wakes up again and again, battery drains in a bag | ✅ stays asleep |
 | 🧊 **Powered on with the keyboard on it** | ❌ bottom screen lost, lifting the keyboard can freeze the laptop | ✅ bottom screen works |
 | 🔐 **Login screen** | ❌ upside down | ✅ right way up, follows rotation and the keyboard |
 | 🔆 **Screen brightness** | ❌ slider does nothing | ✅ one slider, both screens |
@@ -98,6 +99,7 @@ Measured on a UX8407AA with BIOS 310, `linux-cachyos` 7.2.9 and KDE Plasma 6.7.
 | **Accelerometer, ambient light, hinge sensor** (Intel ISH) | No sensors at all. The ISH rejects the generic firmware, so there is no auto-rotation and no auto-brightness. | All three sensors run on ASUS's signed ISH image, downloaded from ASUS and checksum-verified. | `sensors-ish-firmware` |
 | **Rotation** | Screens upside down (the top panel is mounted 180° rotated). KWin turns both panels the same way, touch stops working after any rotation, and a brief tilt flips the screen. | Correct orientation; both panels rotate together, laid out around the hinge (laptop, tent, book). Touch and pen follow every change. Rotation waits for a 1 s stable reading. | `sensors-accel-mount`, `desktop-kde-duo` |
 | **Keyboard on the bottom screen** | The bottom panel stays on under the keyboard and keeps drawing power. | The bottom panel turns off when the keyboard docks, and back on when you lift it. | `desktop-kde-duo` |
+| **Lid closed over the docked keyboard** | The keyboard (USB `0b05:1cd7`) keeps USB remote wakeup on and wakes the laptop from s2idle every 10–60 s; KDE puts it back to sleep each time. 134 suspend cycles in one hour; in a bag the battery drains and the laptop warms up. | The keyboard's USB wakeup is off while the lid is closed and back on after resume; a key press still wakes the laptop with the lid open. Since the fix: five lid-closed sleeps of up to 5.5 h, no keyboard wake. | `power-kbd-lid-wake` |
 | **Power-on with the keyboard docked** | The firmware leaves the bottom panel's PHY (Port B, a C20 PHY inside the Type-C subsystem) unpowered and xe never requests TCSS power for it: `PHY B failed to request refclk`, then pipe B timeouts or a hard hang when the keyboard is lifted. Survives warm reboots. | xe requests TCSS power before programming the PHY clocks and releases it when the panel turns off; the bottom panel works after any power-on. | `display-edp2-tcss` |
 | **Login screen** | Top panel upside down, panels side by side, touch not mapped. | The same duo-rotate runs on the login screen: correct orientation, rotation, touch mapping, panel off under the keyboard. | `desktop-kde-duo` |
 | **Brightness** | Slider and keys change a number in sysfs, but the OLEDs don't get dimmer: the panels only take brightness over DPCD/AUX. | One slider and the brightness keys change both panels' **hardware** backlight. There is no software dimming layer. | `display-dpcd-backlight`, `desktop-kde-duo` |
@@ -155,7 +157,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 </details>
 
 <details>
-<summary><b>📦 The 18 modules</b></summary>
+<summary><b>📦 The 20 modules</b></summary>
 
 | Module | What it changes | Kernels |
 |---|---|---|
@@ -174,6 +176,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `power-profile-sync` | Maps power-profiles-daemon profiles onto asus-wmi, the SoC slider and the Xe GPU | all |
 | `power-runtime-pm` | udev: runtime PM for PCI devices that ship without it | all |
 | `power-tpm-rng` | udev: fTPM not used as a hardware RNG | all |
+| `power-kbd-lid-wake` | systemd-sleep hook: the docked keyboard's USB wakeup is off while the lid is closed | all |
 | `wifi-powersave-ac` | udev + NetworkManager dispatcher: Wi-Fi power save follows AC | all |
 | `wifi-roam-deauth` | DKMS `mac80211` that deauthenticates from the AP it leaves when roaming with PMF, built from the running kernel's own sources | 7.x |
 | `desktop-power-widget` | KDE panel widget: live power draw (RAPL psys, also on AC), charging rate, USB-C charger contract (udev helper), breakdown, temperatures, fans, power mode | KDE Plasma |
@@ -260,7 +263,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 
 `./duo status` after a kernel update tells you whether every fix is still active.
 
-Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian, Ubuntu or Fedora, the config-only modules apply as they are (`touchscreen-hid`, `sensors-*`, `display-*`, `power-runtime-pm`, `power-tpm-rng`, `wifi-powersave-ac`, `power-profile-sync`). The modules that install packages call `pacman`, and the cmdline helper supports Limine and GRUB.
+Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian, Ubuntu or Fedora, the config-only modules apply as they are (`touchscreen-hid`, `sensors-*`, `display-*`, `power-runtime-pm`, `power-tpm-rng`, `power-kbd-lid-wake`, `wifi-powersave-ac`, `power-profile-sync`). The modules that install packages call `pacman`, and the cmdline helper supports Limine and GRUB.
 
 ## FAQ
 
