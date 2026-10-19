@@ -195,6 +195,7 @@ The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hard
 ### 3.6 Audio
 
 - 7.2.x: see section 2 (`audio-ghost-rt722`).
+- 7.2.11: no sound card again, for a different reason. The stable backport `4b7f393a01f8` makes `sof_sdw` connect the amp feedback to the CS35L56 DAI `cs35l56-ot25` (SoundWire DP4), but the codec patch that adds that DAI (`86c8360c97f6`) was not backported: `ASoC: CODEC DAI cs35l56-ot25 not registered`, and the card waits forever. `audio-cs35l56-ot25` builds the 7.2.11 CS35L56 codec with that patch; after reloading the codec the waiting card registered without a reboot (ASUS tuning and calibration loaded, speakers and mics in PipeWire). Queued for 7.2.12.
 - The Cirrus CS35L56 amplifiers load ASUS-specific tuning and calibration, so the EQ layer that the XPS needs in userspace lives in firmware here.
 - On the test system, PulseAudio had replaced pipewire-pulse, which broke browser audio; reverting to pipewire-pulse fixed it. Not a hardware issue.
 

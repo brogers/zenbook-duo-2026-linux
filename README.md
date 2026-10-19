@@ -95,7 +95,7 @@ Measured on a UX8407AA with BIOS 310, `linux-cachyos` 7.2.9 and KDE Plasma 6.7.
 | Hardware | Out of the box | With this repo | Module |
 |---|---|---|---|
 | **Top touchscreen + pen** (Raydium `RAYD0001`) | Dead. `raydium_i2c_ts` grabs a HID-over-I2C device it can't drive, and can Oops in `raydium_i2c_irq`. | Touch, multitouch and pen work through `i2c-hid`, under the finger (the digitizer sits 180° from its upside-down panel). | `touchscreen-hid` |
-| **Speakers, headphones, mics** (CS42L43 + 2× CS35L56) | On 7.2.x: no sound card, only "Dummy Output". The BIOS declares an RT722 that isn't fitted, and `sof_sdw` fails with `-12`. | Sound card registers; speakers use ASUS's calibrated amp tuning, HiFi profile, jack detection. (7.3+ has the fix upstream.) | `audio-ghost-rt722` |
+| **Speakers, headphones, mics** (CS42L43 + 2× CS35L56) | On 7.2.x: no sound card, only "Dummy Output". The BIOS declares an RT722 that isn't fitted, and `sof_sdw` fails with `-12`. 7.2.11 breaks it a second way: it backported only half of an upstream pair, and the card waits for a CS35L56 DAI (`cs35l56-ot25`) that the driver never registers. | Sound card registers; speakers use ASUS's calibrated amp tuning, HiFi profile, jack detection. (7.3+ has both fixes upstream; the second is queued for 7.2.12.) | `audio-ghost-rt722`, `audio-cs35l56-ot25` |
 | **Accelerometer, ambient light, hinge sensor** (Intel ISH) | No sensors at all. The ISH rejects the generic firmware, so there is no auto-rotation and no auto-brightness. | All three sensors run on ASUS's signed ISH image, downloaded from ASUS and checksum-verified. | `sensors-ish-firmware` |
 | **Rotation** | Screens upside down (the top panel is mounted 180° rotated). KWin turns both panels the same way, touch stops working after any rotation, and a brief tilt flips the screen. | Correct orientation; both panels rotate together, laid out around the hinge (laptop, tent, book). Touch and pen follow every change. Rotation waits for a 1 s stable reading. | `sensors-accel-mount`, `desktop-kde-duo` |
 | **Keyboard on the bottom screen** | The bottom panel stays on under the keyboard and keeps drawing power. | The bottom panel turns off when the keyboard docks, and back on when you lift it. | `desktop-kde-duo` |
@@ -157,12 +157,13 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 </details>
 
 <details>
-<summary><b>📦 The 20 modules</b></summary>
+<summary><b>📦 The 21 modules</b></summary>
 
 | Module | What it changes | Kernels |
 |---|---|---|
 | `touchscreen-hid` | Keeps `raydium_i2c_ts` off `RAYD0001`, so `i2c-hid` binds it; udev: libinput calibration for its 180° offset | all |
 | `audio-ghost-rt722` | DKMS `soundwire-intel` with the upstream ghost-RT722 quirk (ca02ffd4975c) | 7.2.x |
+| `audio-cs35l56-ot25` | DKMS `snd-soc-cs35l56` + `snd-soc-cs35l56-sdw` with the OT25 DAI (86c8360c97f6) that 7.2.11 left out | 7.2.11 |
 | `sensors-ish-firmware` | ASUS-signed ISH firmware in `/usr/lib/firmware/updates` | all |
 | `sensors-accel-mount` | hwdb accelerometer mount matrix (panels mounted 180°) | all |
 | `desktop-kde-duo` | `duo-rotate` user service, also on the login screen (rotation, hinge layout, touch mapping, keyboard dock) + one brightness slider for both panels | KDE Plasma |
@@ -238,6 +239,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | Item | Status |
 |---|---|
 | Ghost RT722 audio quirk | `ca02ffd4975c` in 7.3-rc1. A 7.2.y backport request together with the ExpertBook and Zephyrus Duo quirks is drafted in [asus-expertbook-linux](https://github.com/burakgon/asus-expertbook-linux/blob/main/upstream-patches/stable-request-7.2-ghost-rt722.txt). |
+| CS35L56 OT25 DAI missing in 7.2.11 (no sound card) | `86c8360c97f6` [queued for 7.2.12](https://lore.kernel.org/all/2026-10-16-1-daily-reply-0008-cs35l56-ot25-dai-7-2@kernel.org/) on 2026-10-17, carried as DKMS in `audio-cs35l56-ot25` |
 | `raydium_i2c_ts` leaves HID-over-I2C devices to `i2c-hid` | [`kernel/patches/0001`](kernel/patches/), to be submitted |
 | VRR DC balance (DSB poll errors) | `c034e8a46e4c` in 7.3-rc6, `Cc: stable` ([`kernel/patches/0002`](kernel/patches/)) |
 | Panel Replay Early Transport ghost cursor | to be reported to drm/xe |
@@ -256,6 +258,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | | 7.2.x | 7.3.x | 7.4+ |
 |---|---|---|---|
 | `audio-ghost-rt722` | DKMS, rebuilt on every kernel update | n/a (fixed upstream) | n/a |
+| `audio-cs35l56-ot25` | DKMS on 7.2.11 only (fix queued for 7.2.12) | n/a (fixed upstream) | n/a |
 | `keyboard-hid-asus` | DKMS (7.2 source) | DKMS (7.3 source) | needs a new source until upstream |
 | `display-edp2-tcss` | DKMS (kernel's own source + patch) | DKMS | DKMS, as long as the patch applies |
 | `wifi-roam-deauth` | DKMS (kernel's own source + patch) | DKMS | DKMS, as long as the patch applies |
@@ -270,7 +273,7 @@ Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian,
 <details>
 <summary><b>Do I have to rebuild the kernel?</b></summary>
 
-No. Four modules use DKMS (`audio-ghost-rt722` on 7.2.x only, `keyboard-hid-asus`, `display-edp2-tcss`, `wifi-roam-deauth`), which rebuilds them automatically on kernel updates. `display-edp2-tcss` and `wifi-roam-deauth` download the running kernel's own graphics driver or mac80211 sources (a few MB) for each build. Everything else is configuration.
+No. Five modules use DKMS (`audio-ghost-rt722` on 7.2.x only, `audio-cs35l56-ot25` on 7.2.11 only, `keyboard-hid-asus`, `display-edp2-tcss`, `wifi-roam-deauth`), which rebuilds them automatically on kernel updates. `display-edp2-tcss` and `wifi-roam-deauth` download the running kernel's own graphics driver or mac80211 sources (a few MB) for each build. Everything else is configuration.
 </details>
 
 <details>

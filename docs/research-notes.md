@@ -5,6 +5,7 @@ Upstream sources the modules in this repo rely on, as of 2026-10-04. Their statu
 ## Audio
 
 - `ca02ffd4975c` soundwire: dmi-quirks: Disable ghost Realtek on Asus Zenbook Duo (Charles Keepax, 2026-07-20). In 7.3-rc1, no stable tag. → `audio-ghost-rt722`
+- `86c8360c97f6` ASoC: cs35l56: Add DAI for SDCA OT25 stream (Richard Fitzgerald, 2026-10-05), patch 1 of a pair whose patch 2 is `4b7f393a01f8` ASoC: sdw_utils: Switch CS35L56/57/62/63 to use OT25 DAI. Both are in 7.3. 7.2.11 backported only patch 2 (`Fixes:` tag), so `sof_sdw` waits for `cs35l56-ot25` and the card never registers. Reported on the stable list on 2026-10-16 (Galaxy Book6 Pro, CS35L57); patch 1 was queued for 7.2.12 on 2026-10-17. → `audio-cs35l56-ot25`
 
 ## Display (xe)
 

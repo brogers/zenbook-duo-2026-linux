@@ -1,0 +1,9 @@
+# Only the CS35L56 codec core and its SoundWire glue.
+# The patch also adds a define to include/sound/cs35l56.h. NOSTDINC_FLAGS is the
+# only include list kbuild puts before the kernel's own headers, so the patched
+# copy wins.
+NOSTDINC_FLAGS += -I$(src)/../../../include
+
+obj-m += snd-soc-cs35l56.o snd-soc-cs35l56-sdw.o
+snd-soc-cs35l56-y := cs35l56.o
+snd-soc-cs35l56-sdw-y := cs35l56-sdw.o
