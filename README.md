@@ -171,7 +171,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `display-psr-et-off` | Panel Replay Early Transport off (debugfs bit at boot) | all |
 | `display-dsc-10bit` | Forces DSC on both panels for 10 bpc (debugfs at boot) | all |
 | `display-edp2-tcss` | DKMS `xe` that requests Type-C subsystem power for the bottom panel (xe #9196), built from the running kernel's own sources (a pacman hook fetches them) | 7.x |
-| `keyboard-hid-asus` | DKMS `hid-asus`: Duo IDs, 16-byte feature reports, hotkey descriptor fix, Fn-lock, mic-mute LED | 7.2.x, 7.3.x |
+| `keyboard-hid-asus` | DKMS `hid-asus`: Duo IDs, 16-byte feature reports, hotkey descriptor fix, Fn-lock, mic-mute LED, keyboard battery over Bluetooth | 7.2.x, 7.3.x |
 | `touchpad-palm` | libinput quirk: the keyboard's touchpad as a touchpad+keyboard combo (palm rejection, disable-while-typing) | all |
 | `power-dtt` | `thermald --adaptive` with the BIOS's DTT tables | all |
 | `power-profile-sync` | Maps power-profiles-daemon profiles onto asus-wmi, the SoC slider and the Xe GPU | all |
@@ -244,7 +244,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | VRR DC balance (DSB poll errors) | `c034e8a46e4c` in 7.3-rc6, `Cc: stable` ([`kernel/patches/0002`](kernel/patches/)) |
 | Panel Replay Early Transport ghost cursor | to be reported to drm/xe |
 | Bottom panel after a docked power-on (TCSS power for Port B) | [xe #9196](https://gitlab.freedesktop.org/drm/xe/kernel/-/issues/9196); [RFC](https://lore.kernel.org/all/20261006-ptl-port-b-tcss-v1-1-240670342cd3@gmail.com/) on 2026-10-06, [v2](https://lore.kernel.org/all/20261015-ptl-port-b-tcss-v2-0-e00ce882402d@gmail.com/) to intel-gfx / intel-xe on 2026-10-15, carried as DKMS in `display-edp2-tcss` |
-| `hid-asus` Zenbook Duo keyboard support | to be submitted |
+| `hid-asus` Zenbook Duo keyboard support (IDs, report length, hotkey descriptor, battery report) | to be submitted; 7.3 has none of it |
 | mac80211: deauthenticate from the old AP when roaming with MFP | [sent to linux-wireless](https://lore.kernel.org/all/20261015-mac80211-roam-mfp-deauth-v1-1-9ccc69b434fd@gmail.com/) on 2026-10-15, carried as DKMS in `wifi-roam-deauth` |
 | Keyboard touchpad palm rejection (libinput quirk) | to be submitted to libinput |
 | HDR (DisplayID 2.0 HDR metadata) | fixed in libdisplay-info 0.4.0; Arch packaging update pending |

@@ -146,6 +146,7 @@ Verified on hardware: laptop layout, upright (book) mode, touch, and the login s
 - Fn key codes (report 0x5a, byte 1): 0x10/0x20 brightness, 0xc7 keyboard backlight, 0x7c microphone, 0x6a ScreenPad, 0x9c display switch, 0x86 MyASUS, 0x5f ScreenXpert. Fn-lock: `5A D0 4E 01/00`.
 - `keyboard-hid-asus` provides backlight, Fn keys, Fn-lock and the microphone LED over both USB and Bluetooth. (An earlier separate `keyboard-backlight` udev module was folded into it.) Copilot/MyASUS/F13/display-switch keys have no action assigned.
 - Bluetooth: the keyboard must be paired for it to work when detached; once paired, backlight and keys work over BT. See [`research-notes.md`](research-notes.md) for pairing steps.
+- Battery: the keyboard sends `5a 3d <percent> <status>` in the same report, over Bluetooth right after connecting and then about every 8 minutes (status 00), docked only once full (`5a 3d 64 01`). Through the Array descriptor the percentage pressed the hotkey with that code until the next report: logged on 2026-10-22, `0x38` (56%) held `KEY_PROG1` for 8.5 minutes; 53% is display off, 32% brightness up, 16% brightness down. Since 2026-10-22 `keyboard-hid-asus` drops the report from the input path and, over Bluetooth, registers it as the power supply `asus-keyboard-<address>-battery` (UPower: keyboard).
 
 #### 3.3.1 Touchpad palm rejection (`touchpad-palm`)
 

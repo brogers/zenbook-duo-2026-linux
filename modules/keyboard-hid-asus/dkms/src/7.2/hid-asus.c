@@ -159,6 +159,10 @@ struct asus_drvdata {
 	struct led_classdev duo_micmute_led;
 	int duo_init_runs;
 	bool duo_init_ready;
+	struct work_struct duo_battery_work;
+	struct power_supply *duo_battery;
+	struct power_supply_desc duo_battery_desc;
+	int duo_battery_capacity;
 	unsigned long quirks;
 	struct hid_device *hdev;
 	struct input_dev *input;
@@ -178,6 +182,7 @@ struct asus_drvdata {
 
 static int asus_report_battery(struct asus_drvdata *, u8 *, int);
 static void asus_duo_schedule_reinit(struct asus_drvdata *drvdata);
+static void asus_duo_battery_report(struct asus_drvdata *drvdata, u8 capacity);
 
 static const struct asus_touchpad_info asus_i2c_tp = {
 	.max_x = 2794,
@@ -563,6 +568,19 @@ static int asus_raw_event(struct hid_device *hdev,
 		 */
 		if (size == 2 && data[0] == 0x02 && data[1] == 0x00)
 			return -1;
+	}
+
+	/*
+	 * The Zenbook Duo keyboard reports its battery in the hotkey report:
+	 * "5a 3d <percent> <status>". In the hotkey array the percentage
+	 * would press the hotkey with that code (0x35 display off at 53%,
+	 * 0x10 brightness down at 16%, ...) until the next report minutes
+	 * later, so keep the report out of the input path.
+	 */
+	if (drvdata->quirks & QUIRK_ZENBOOK_DUO_KBD &&
+	    report->id == FEATURE_KBD_REPORT_ID && size >= 3 && data[1] == 0x3d) {
+		asus_duo_battery_report(drvdata, data[2]);
+		return -1;
 	}
 
 	return 0;
@@ -1425,6 +1443,92 @@ static void asus_duo_schedule_reinit(struct asus_drvdata *drvdata)
 	mod_delayed_work(system_wq, &drvdata->duo_init_work, msecs_to_jiffies(2000));
 }
 
+static enum power_supply_property asus_duo_battery_props[] = {
+	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_SCOPE,
+	POWER_SUPPLY_PROP_MODEL_NAME,
+};
+
+static int asus_duo_battery_get_property(struct power_supply *psy,
+					 enum power_supply_property psp,
+					 union power_supply_propval *val)
+{
+	struct asus_drvdata *drvdata = power_supply_get_drvdata(psy);
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_STATUS:
+		/* only registered over Bluetooth, i.e. off the dock */
+		val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		break;
+	case POWER_SUPPLY_PROP_PRESENT:
+		val->intval = 1;
+		break;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = READ_ONCE(drvdata->duo_battery_capacity);
+		break;
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = POWER_SUPPLY_SCOPE_DEVICE;
+		break;
+	case POWER_SUPPLY_PROP_MODEL_NAME:
+		val->strval = drvdata->hdev->name;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/* Registered on the first battery report, so it never shows a made-up level. */
+static void asus_duo_battery_register(struct work_struct *work)
+{
+	struct asus_drvdata *drvdata = container_of(work, struct asus_drvdata,
+						    duo_battery_work);
+	struct hid_device *hdev = drvdata->hdev;
+	struct power_supply_config pscfg = { .drv_data = drvdata };
+	struct power_supply *psy;
+
+	if (drvdata->duo_battery)
+		return;
+
+	drvdata->duo_battery_desc.name = devm_kasprintf(&hdev->dev, GFP_KERNEL,
+							"asus-keyboard-%s-battery",
+							strlen(hdev->uniq) ?
+							hdev->uniq : dev_name(&hdev->dev));
+	if (!drvdata->duo_battery_desc.name)
+		return;
+	drvdata->duo_battery_desc.type = POWER_SUPPLY_TYPE_BATTERY;
+	drvdata->duo_battery_desc.properties = asus_duo_battery_props;
+	drvdata->duo_battery_desc.num_properties = ARRAY_SIZE(asus_duo_battery_props);
+	drvdata->duo_battery_desc.get_property = asus_duo_battery_get_property;
+
+	psy = devm_power_supply_register(&hdev->dev, &drvdata->duo_battery_desc, &pscfg);
+	if (IS_ERR(psy)) {
+		hid_warn(hdev, "Unable to register keyboard battery: %pe\n", psy);
+		return;
+	}
+	power_supply_powers(psy, &hdev->dev);
+	WRITE_ONCE(drvdata->duo_battery, psy);
+}
+
+static void asus_duo_battery_report(struct asus_drvdata *drvdata, u8 capacity)
+{
+	struct power_supply *psy;
+
+	/* Docked (USB) it charges and only reports once it is full. */
+	if (drvdata->hdev->bus != BUS_BLUETOOTH || capacity > 100)
+		return;
+
+	WRITE_ONCE(drvdata->duo_battery_capacity, capacity);
+	psy = READ_ONCE(drvdata->duo_battery);
+	if (psy)
+		power_supply_changed(psy);
+	else
+		schedule_work(&drvdata->duo_battery_work);
+}
+
 static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 {
 	struct hid_report_enum *rep_enum;
@@ -1499,6 +1603,9 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 		hdev->quirks |= HID_QUIRK_NO_INIT_REPORTS;
 
 	drvdata->hdev = hdev;
+
+	if (drvdata->quirks & QUIRK_ZENBOOK_DUO_KBD)
+		INIT_WORK(&drvdata->duo_battery_work, asus_duo_battery_register);
 
 	if (drvdata->quirks & (QUIRK_T100CHI | QUIRK_T90CHI)) {
 		ret = asus_battery_probe(hdev);
@@ -1604,6 +1711,8 @@ err_stop_hw:
 
 	asus_worker_stop(drvdata->worker);
 	hid_hw_stop(hdev);
+	if (drvdata->quirks & QUIRK_ZENBOOK_DUO_KBD)
+		cancel_work_sync(&drvdata->duo_battery_work);
 	return ret;
 }
 
@@ -1619,6 +1728,8 @@ static void asus_remove(struct hid_device *hdev)
 
 	asus_worker_stop(drvdata->worker);
 	hid_hw_stop(hdev);
+	if (drvdata->quirks & QUIRK_ZENBOOK_DUO_KBD)
+		cancel_work_sync(&drvdata->duo_battery_work);
 }
 
 static const __u8 asus_g752_fixed_rdesc[] = {
