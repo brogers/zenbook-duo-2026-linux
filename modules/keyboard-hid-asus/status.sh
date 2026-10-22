@@ -1,8 +1,15 @@
 # shellcheck shell=bash
-if ! modinfo -n hid_asus 2>/dev/null | grep -q updates/dkms; then
+# The loaded hid-asus is the patched one when it is out of tree (taint O); when it is
+# not loaded, look at what would load. modinfo alone fails once a kernel update has
+# removed the running kernel's modules.
+if [[ -d /sys/module/hid_asus ]]; then
+	[[ $(</sys/module/hid_asus/taint) == *O* ]]
+else
+	modinfo -n hid_asus 2>/dev/null | grep -q updates/dkms
+fi || {
 	warn "stock hid-asus in use (backlight writes time out, no Fn keys)"
 	return 1
-fi
+}
 if klog | grep -q "Asus failed to set keyboard backlight"; then
 	warn "backlight write errors in this boot (reboot after install if they predate it)"
 fi

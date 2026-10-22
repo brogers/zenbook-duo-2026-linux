@@ -3,7 +3,9 @@
 
 param=/sys/module/mac80211/parameters/zenbook_duo_roam_deauth
 if [[ ! -e $param ]]; then
-	if dkms status zenbook-duo-mac80211 2>/dev/null | grep -q "$(uname -r).*installed"; then
+	if [[ ! -d /usr/lib/modules/$(uname -r) ]]; then
+		info "the running kernel was updated: the patched mac80211 loads after a reboot"
+	elif dkms status zenbook-duo-mac80211 2>/dev/null | grep -q "$(uname -r).*installed"; then
 		info "patched mac80211 built for $(uname -r); reboot pending"
 	else
 		warn "patched mac80211 not built for $(uname -r) (see: dkms status zenbook-duo-mac80211)"
