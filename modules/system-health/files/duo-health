@@ -31,6 +31,10 @@ kernels() {
 			dkms status -m zenbook-duo-xe -k "$ver" 2>/dev/null | grep -q installed ||
 				say "$ver: bottom-screen fix (patched xe) did not build (often a network hiccup fetching its sources): power on with the keyboard lifted on this kernel, or retry: sudo ./duo apply display-edp2-tcss"
 		fi
+		if applied wifi-roam-deauth && [[ $ver =~ ^7\. ]]; then
+			dkms status -m zenbook-duo-mac80211 -k "$ver" 2>/dev/null | grep -q installed ||
+				say "$ver: Wi-Fi roaming fix (patched mac80211) did not build (often a network hiccup fetching its sources): retry: sudo ./duo apply wifi-roam-deauth"
+		fi
 	done
 	if applied audio-ghost-rt722 && ((all73)); then
 		say "every installed kernel has the upstream audio fix now: 'sudo ./duo revert audio-ghost-rt722' is safe"
@@ -61,6 +65,15 @@ login() {
 			[[ "$(basename "$(readlink "$d/driver" 2>/dev/null)")" == asus ]] && bound=1
 		done
 		((bound)) || { notify "Keyboard fix not active" "The docked keyboard is not on the patched hid-asus driver (kernel $ver): backlight and Fn keys may not work."; problems=1; }
+	fi
+	# the DKMS builds fetch sources at kernel-update time; the pacman output is easy to miss
+	if applied display-edp2-tcss && [[ ! -e /sys/module/xe/parameters/zenbook_duo_edp2_tcss ]]; then
+		notify "Bottom-screen fix not active" "The patched xe driver is not running on kernel $ver (no DKMS build for it). Power on with the keyboard lifted, and run: sudo ./duo apply display-edp2-tcss, then reboot."
+		problems=1
+	fi
+	if applied wifi-roam-deauth && [[ -d /sys/module/mac80211 && ! -e /sys/module/mac80211/parameters/zenbook_duo_roam_deauth ]]; then
+		notify "Wi-Fi roaming fix not active" "The patched mac80211 is not running on kernel $ver. Run: sudo ./duo apply wifi-roam-deauth, then reboot."
+		problems=1
 	fi
 	((problems)) || say "login health check: all fine"
 	return 0
