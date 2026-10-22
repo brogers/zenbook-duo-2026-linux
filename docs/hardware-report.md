@@ -212,6 +212,17 @@ The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hard
 - ACPI: `\_SB.AUDC` is defined in both the DSDT and SSDT26 (AE_ALREADY_EXISTS, cosmetic); `_TRT` is empty.
 - `intel-hid INTC10CC: failed to get button capability`, `ucsi GET_CURRENT_CAM failed`: cosmetic.
 
+### 3.9 Kernel 7.3 (2026-10-22, `linux-cachyos` 7.3.0-2 and 7.3.0-3)
+
+- Fixed upstream: sound comes up with the stock kernel (the ghost-RT722 quirk and the CS35L56 OT25 DAI are both in 7.3), so `audio-ghost-rt722` and `audio-cs35l56-ot25` are not needed on 7.3.
+- Still needed, nothing relevant changed in 7.3: the TCSS power request for Port B (`display-edp2-tcss`; v2 has had no review yet), the mac80211 deauthentication on PMF roams (`wifi-roam-deauth`), the Duo keyboard in `hid-asus` (7.3 only added the MyASUS `0x86` and S-key `0x5f` codes), the ASUS ISH firmware (linux-firmware 20261019 has Dell, HP and Lenovo PTL images only), Early Transport off (no ET change in 7.3) and DSC for 10 bpc (7.3 prefers DSC over 6 bpc only for HDMI sinks). Every patch applies to 7.3.0 unchanged.
+- Changes that needed work here:
+  - CachyOS tags releases with the `.0` (`cachyos-7.3.0-2`), release candidates without it (`cachyos-7.3-rc6-1`). The DKMS source fetch looked for `cachyos-7.3-*`. It now takes the tag of the package release.
+  - pacman 7.1 runs hooks and scriptlets in a network namespace with only a loopback interface (`NetworkAccess` in alpm-hooks(5)). The DKMS hook could not fetch sources (`Failed to connect to github.com port 443 after 1 ms`), so the patched xe and mac80211 were not built for 7.3.0-2. Each module now installs a pacman hook that may use the network and fetches the sources just before DKMS builds.
+  - The UCSI debugfs `response` grew from 128 to 192 bits; the charger helper of `desktop-power-widget` accepts both.
+  - `system_wq` is deprecated (warning at the first use); `hid-asus` uses `system_percpu_wq`.
+- New: on the first 7.3.0 boot (stock xe, keyboard on Bluetooth) the display froze on the login screen for 44 minutes: `DMC wakelock ack timed out` while leaving DC states for an atomic commit, `Unexpected DBuf power power state (0x00000000, expected 0x0000000f)`, then `flip_done timed out` on pipes A and B and repeated wakelock timeouts. The same DMC firmware (v2.36) had no such error in any earlier boot, and the DMC wakelock code is unchanged between 7.2.11 and 7.3. Related 7.3 changes: `PIPEDMC_ERROR` and the GTT/ATS fault interrupts are now enabled on display version 30, and the DC state write check masks the CMTG status bits. Not reproduced in the following boots.
+
 ## 4. Comparison with Dell XPS / Omarchy claims
 
 | Topic | On this machine |

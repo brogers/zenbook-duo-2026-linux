@@ -202,6 +202,7 @@ If you had to force a reboot, the previous boot's log still has it: `journalctl 
 Known patterns:
 - `Timed out waiting for PSR Idle for re-enable` or `pipe A] flip_done timed out`: a Panel Replay hang on the top screen, reported on 7.1/7.2 by other UX8407AA users. Fallback: add `xe.enable_panel_replay=0 xe.enable_psr=1` to the kernel command line.
 - `PHY B failed`, `AUX B/DDI B/PHY B: timeout` or `pipe B] flip_done timed out`: the bottom-screen bug, see [above](#if-the-bottom-screen-stays-black).
+- `DMC wakelock ack timed out` and `Unexpected DBuf power power state (0x00000000, expected 0x0000000f)`, then `flip_done timed out` on pipes A and B: both screens froze on the login screen of the first 7.3.0 boot, with the keyboard detached and the stock xe. It has not come back since; if you see it, please open an issue with `journalctl -b -1 -k`.
 
 One freeze while pressing the brightness keys was seen on 7.2.9 and not reproduced since. The kernel kept logging through it, so the display stack hung, not the kernel. No PSR, DSB or I²C errors were logged.
 
