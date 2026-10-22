@@ -14,7 +14,8 @@ Makes the bottom screen work after the laptop was powered on (or restarted) with
   - `0002-…` requests TCSS power for a non-TC C20 PHY on Panther Lake (port B) before the PHY clocks are programmed, the same way the driver already does for Type-C ports (including that mailbox workaround). It releases the request once the PLL is disabled and waits for the TCSS power state to follow in both directions. With the panel off (keyboard docked), the hardware is in the same state as with the stock driver.
   - Nothing else in xe changes.
 - `0003-…` only adds the `zenbook_duo_edp2_tcss` module parameter (an off switch, and the marker `desktop-kde-duo` looks for); it is not part of the upstream submission.
-- `dkms/build.sh` takes the driver sources of the exact kernel being built for: a sparse clone of `drivers/gpu/drm/{xe,i915}` from the tree the kernel package was built from (CachyOS: `github.com/CachyOS/linux` tag `cachyos-<version>-<n>`; Arch: `archlinux/linux` `v<version>-archN`; otherwise kernel.org stable), cached in `/var/cache/zenbook-duo/xe-src`. Building takes about a minute after each kernel update. If the clone or the build fails, the stock xe stays in use and `desktop-kde-duo` keeps protecting the bottom panel.
+- `dkms/build.sh` takes the driver sources of the exact kernel being built for: a sparse clone of `drivers/gpu/drm/{xe,i915}` from the tree the kernel package was built from (CachyOS: `github.com/CachyOS/linux` tag `cachyos-<version>-<pkgrel>`, e.g. `cachyos-7.3.0-3` for `7.3.0-3-cachyos`; Arch: `archlinux/linux` `v<version>-archN`; otherwise kernel.org stable), cached in `/var/cache/zenbook-duo/xe-src`. Building takes about a minute after each kernel update. If the clone or the build fails, the stock xe stays in use and `desktop-kde-duo` keeps protecting the bottom panel.
+- Installs the pacman hook `/etc/pacman.d/hooks/65-zenbook-duo-xe-sources.hook`. pacman 7.1 runs hooks, the DKMS one included, without network access. This hook asks for it (`NetworkAccess = allowed`) and downloads a new kernel's sources into the cache right before the DKMS hook builds, so the build itself never needs the network.
 - Installs packages if missing: `git`, `patch`, `pahole`, and `clang`, `llvm`, `lld` for clang-built kernels.
 - `desktop-kde-duo` sees the patched driver (`/sys/module/xe/parameters/zenbook_duo_edp2_tcss`) and lets the bottom panel turn on after a docked power-on.
 
@@ -30,6 +31,7 @@ journalctl -k -b | grep -E 'PHY B|DDI BUF B|TCSS'      # should be empty
 `sudo ./duo revert display-edp2-tcss`, then reboot. The initramfs is rebuilt with the stock xe. To turn the fix off for a single boot, add `xe.zenbook_duo_edp2_tcss=0` to the kernel command line.
 
 ## Notes
+- 7.3 does not have the fix (v2 is still waiting for review); the patches apply to 7.3.0 unchanged (DKMS 1.4).
 - v2 (DKMS 1.3) verified on 2026-10-15 (7.2.9-2-cachyos, BIOS 310):
   - Power-on with the keyboard docked, then lifting it.
   - The bottom panel turned off and on from KScreen twice.

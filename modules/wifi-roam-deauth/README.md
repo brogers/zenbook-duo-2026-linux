@@ -20,6 +20,7 @@ Makes Wi-Fi roaming work on WPA3 networks whose access points keep state across 
   - The build takes about 10 seconds.
   - If the clone or the build fails, the stock mac80211 stays in use.
   - mac80211 is not in the initramfs, so no initramfs rebuild is needed.
+- Installs the pacman hook `/etc/pacman.d/hooks/65-zenbook-duo-mac80211-sources.hook`. pacman 7.1 runs hooks, the DKMS one included, without network access. This hook asks for it (`NetworkAccess = allowed`) and downloads a new kernel's `net/mac80211` into the cache right before the DKMS hook builds.
 - Installs packages if missing: `git`, `patch`, `pahole`, and `clang`, `llvm`, `lld` for clang-built kernels.
 
 ## Check
@@ -35,6 +36,7 @@ A good roam is a `disconnect from AP …` line followed by a single `associate w
 `sudo ./duo revert wifi-roam-deauth`, then reboot. To turn the change off without a reboot: `echo 0 | sudo tee /sys/module/mac80211/parameters/zenbook_duo_roam_deauth`.
 
 ## Notes
+- 7.3 does not have the fix (no review yet); the patches apply to 7.3.0 unchanged (DKMS 1.1).
 - Verified on 2026-10-15 (7.2.9-2-cachyos) with an experimental build that had a runtime switch for the deauthentication and for the response wait:
   - Without the deauthentication, the Deco ignored Reassociation Requests sent 0 and 500 ms after the first one and answered one sent after 1 s.
   - With the deauthentication, the 6 GHz → 5 GHz roam on one unit, roams between units and reassociations with the current AP all completed on the first attempt in 64–74 ms.

@@ -170,7 +170,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `display-dpcd-backlight` | `xe.enable_dpcd_backlight=1` | all |
 | `display-psr-et-off` | Panel Replay Early Transport off (debugfs bit at boot) | all |
 | `display-dsc-10bit` | Forces DSC on both panels for 10 bpc (debugfs at boot) | all |
-| `display-edp2-tcss` | DKMS `xe` that requests Type-C subsystem power for the bottom panel (xe #9196), built from the running kernel's own sources | 7.x |
+| `display-edp2-tcss` | DKMS `xe` that requests Type-C subsystem power for the bottom panel (xe #9196), built from the running kernel's own sources (a pacman hook fetches them) | 7.x |
 | `keyboard-hid-asus` | DKMS `hid-asus`: Duo IDs, 16-byte feature reports, hotkey descriptor fix, Fn-lock, mic-mute LED | 7.2.x, 7.3.x |
 | `touchpad-palm` | libinput quirk: the keyboard's touchpad as a touchpad+keyboard combo (palm rejection, disable-while-typing) | all |
 | `power-dtt` | `thermald --adaptive` with the BIOS's DTT tables | all |
@@ -179,7 +179,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `power-tpm-rng` | udev: fTPM not used as a hardware RNG | all |
 | `power-kbd-lid-wake` | systemd-sleep hook: the docked keyboard's USB wakeup is off while the lid is closed | all |
 | `wifi-powersave-ac` | udev + NetworkManager dispatcher: Wi-Fi power save follows AC | all |
-| `wifi-roam-deauth` | DKMS `mac80211` that deauthenticates from the AP it leaves when roaming with PMF, built from the running kernel's own sources | 7.x |
+| `wifi-roam-deauth` | DKMS `mac80211` that deauthenticates from the AP it leaves when roaming with PMF, built from the running kernel's own sources (a pacman hook fetches them) | 7.x |
 | `desktop-power-widget` | KDE panel widget: live power draw (RAPL psys, also on AC), charging rate, USB-C charger contract (udev helper), breakdown, temperatures, fans, power mode | KDE Plasma |
 | `system-health` | pacman hook after kernel updates + one check per login; notifies only when a fix is not active | all |
 
@@ -273,7 +273,7 @@ Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian,
 <details>
 <summary><b>Do I have to rebuild the kernel?</b></summary>
 
-No. Five modules use DKMS (`audio-ghost-rt722` on 7.2.x only, `audio-cs35l56-ot25` on 7.2.11 only, `keyboard-hid-asus`, `display-edp2-tcss`, `wifi-roam-deauth`), which rebuilds them automatically on kernel updates. `display-edp2-tcss` and `wifi-roam-deauth` download the running kernel's own graphics driver or mac80211 sources (a few MB) for each build. Everything else is configuration.
+No. Five modules use DKMS (`audio-ghost-rt722` on 7.2.x only, `audio-cs35l56-ot25` on 7.2.11 only, `keyboard-hid-asus`, `display-edp2-tcss`, `wifi-roam-deauth`), which rebuilds them automatically on kernel updates. `display-edp2-tcss` and `wifi-roam-deauth` build from the new kernel's own graphics driver or mac80211 sources (a few MB). pacman 7.1 runs the DKMS hook without network access, so each of the two installs a small pacman hook that may use the network and downloads the sources just before. Everything else is configuration.
 </details>
 
 <details>
