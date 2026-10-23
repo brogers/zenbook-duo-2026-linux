@@ -2,8 +2,9 @@
 # hid-asus with: Duo IDs bound to the generic HID group only (touchpad stays on
 # hid-multitouch), feature reports clamped to the device's report length (stock
 # hid-asus sends 64 bytes, the 16 byte report 0x5a then times out with -110), the
-# 0x5a hotkey descriptor turned into an array, and the missing Duo key codes.
-duo_dkms_install "$MOD_DIR/dkms" zenbook-duo-hid-asus 1.4
+# 0x5a hotkey descriptor turned into an array, the missing Duo key codes, and the
+# keyboard's battery report (5a 3d) kept out of the hotkeys.
+duo_dkms_install "$MOD_DIR/dkms" zenbook-duo-hid-asus 1.5
 
 # switch the running kernel over: reload hid-asus, rebind the ASUS control interface
 if modinfo -n hid_asus 2>/dev/null | grep -q updates/dkms; then
