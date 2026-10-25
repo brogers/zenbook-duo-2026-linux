@@ -297,7 +297,7 @@ duo_revert_manifest() {
 			DUO_NEED_REBOOT=1
 			;;
 		dkms)
-			dkms remove -m "$a" -v "$b" --all >/dev/null 2>&1
+			dkms remove -m "$a" -v "$b" --all >/dev/null 2>&1 || true
 			rm -rf "/usr/src/$a-$b"
 			ok "removed dkms $a/$b"
 			# the initramfs may carry its own copy of the module (xe does)

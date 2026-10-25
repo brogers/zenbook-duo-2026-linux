@@ -5,7 +5,7 @@ Removes the frozen extra copies of the mouse cursor on the top screen, while kee
 ## The problem
 - Two or three frozen copies of the cursor stay on the top screen.
 - The cause is the "Early Transport" part of Panel Replay Selective Update in the `xe` driver. Turning off only Early Transport fixes it; Panel Replay itself can stay on.
-- There is no module parameter for Early Transport, only a debugfs debug bit. The Early Transport fixes already in 7.2.9 and 7.3-rc5 do not fix this bug.
+- There is no module parameter for Early Transport, only a debugfs debug bit. The Early Transport fixes already in 7.2.9 and 7.3-rc5 do not fix this bug, and 7.3 adds no Early Transport change.
 
 ## What it changes
 - Installs and enables (`--now`) `/etc/systemd/system/zenbook-duo-psr-et-off.service`.

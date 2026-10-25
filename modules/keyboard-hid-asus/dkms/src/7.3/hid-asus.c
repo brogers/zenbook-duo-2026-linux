@@ -577,6 +577,18 @@ static int asus_raw_event(struct hid_device *hdev,
 	    report->id == FEATURE_KBD_REPORT_ID && size >= 3 && data[1] == 0x85)
 		memset(&data[2], 0, size - 2);
 
+	/*
+	 * The Zenbook Duo keyboard reports its battery in the hotkey report,
+	 * "5a 3d <percent> <status>": over Bluetooth at each 1% step, docked
+	 * once it is full. In the hotkey array the percentage would press the
+	 * hotkey with that code (0x35 display off at 53%, 0x10 brightness down
+	 * at 16%, ...) until the next report, so drop it. Over Bluetooth BlueZ
+	 * reads the level from the keyboard's GATT Battery Service.
+	 */
+	if (drvdata->quirks & QUIRK_ZENBOOK_DUO_KBD &&
+	    report->id == FEATURE_KBD_REPORT_ID && size >= 3 && data[1] == 0x3d)
+		return -1;
+
 	return 0;
 }
 
@@ -1435,7 +1447,7 @@ static void asus_duo_schedule_reinit(struct asus_drvdata *drvdata)
 	if (!drvdata->duo_init_ready)
 		return;
 	drvdata->duo_init_runs = 0;
-	mod_delayed_work(system_wq, &drvdata->duo_init_work, msecs_to_jiffies(2000));
+	mod_delayed_work(system_percpu_wq, &drvdata->duo_init_work, msecs_to_jiffies(2000));
 }
 
 static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)

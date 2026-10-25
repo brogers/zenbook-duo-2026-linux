@@ -146,6 +146,8 @@ Verified on hardware: laptop layout, upright (book) mode, touch, and the login s
 - Fn key codes (report 0x5a, byte 1): 0x10/0x20 brightness, 0xc7 keyboard backlight, 0x7c microphone, 0x6a ScreenPad, 0x9c display switch, 0x86 MyASUS, 0x5f ScreenXpert. Fn-lock: `5A D0 4E 01/00`.
 - `keyboard-hid-asus` provides backlight, Fn keys, Fn-lock and the microphone LED over both USB and Bluetooth. (An earlier separate `keyboard-backlight` udev module was folded into it.) Copilot/MyASUS/F13/display-switch keys have no action assigned.
 - Bluetooth: the keyboard must be paired for it to work when detached; once paired, backlight and keys work over BT. See [`research-notes.md`](research-notes.md) for pairing steps.
+- Battery: the keyboard sends `5a 3d <percent> <status>` in the same report, over Bluetooth each time the level changes by 1% (status 00; every 7–9 minutes in use on 2026-10-22/23), docked only once full (`5a 3d 64 01`). Connecting sends none: on 2026-10-23 the first report came 18.5 minutes after a reconnect at 01:59 (39% → 38%) and 5.7 minutes after undocking at 10:43 (→ 99%). Through the Array descriptor the percentage pressed the hotkey with that code until the next report: logged on 2026-10-22, `0x38` (56%) held `KEY_PROG1` for 8.5 minutes; 53% is display off, 32% brightness up, 16% brightness down. Since 2026-10-22 `keyboard-hid-asus` drops the report from the input path.
+- The level itself comes from the keyboard's GATT Battery Service (`0x180F`, Battery Level `0x2A19` with notifications): BlueZ reads it within seconds of connecting and follows every change (`org.bluez.Battery1`), and UPower lists it as a keyboard (`keyboard_dev_<address>`). `keyboard-hid-asus` 1.4 (2026-10-22) also registered the HID report as the power supply `asus-keyboard-<address>-battery`. It only appeared at the first report and then made UPower drop BlueZ's entry for the same keyboard, so it added a second source and nothing else; 1.5 (2026-10-23) registers none. UPower 1.91.5 does not bring a dropped BlueZ entry back when the kernel supply goes away (the entry has left its device list), so after updating from 1.4 with the keyboard connected, the keyboard is listed again at its next reconnect or after `systemctl restart upower`.
 
 #### 3.3.1 Touchpad palm rejection (`touchpad-palm`)
 
@@ -195,6 +197,7 @@ The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hard
 ### 3.6 Audio
 
 - 7.2.x: see section 2 (`audio-ghost-rt722`).
+- 7.2.11: no sound card again, for a different reason. The stable backport `4b7f393a01f8` makes `sof_sdw` connect the amp feedback to the CS35L56 DAI `cs35l56-ot25` (SoundWire DP4), but the codec patch that adds that DAI (`86c8360c97f6`) was not backported: `ASoC: CODEC DAI cs35l56-ot25 not registered`, and the card waits forever. `audio-cs35l56-ot25` builds the 7.2.11 CS35L56 codec with that patch; after reloading the codec the waiting card registered without a reboot (ASUS tuning and calibration loaded, speakers and mics in PipeWire). Queued for 7.2.12.
 - The Cirrus CS35L56 amplifiers load ASUS-specific tuning and calibration, so the EQ layer that the XPS needs in userspace lives in firmware here.
 - On the test system, PulseAudio had replaced pipewire-pulse, which broke browser audio; reverting to pipewire-pulse fixed it. Not a hardware issue.
 
@@ -209,6 +212,17 @@ The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hard
 
 - ACPI: `\_SB.AUDC` is defined in both the DSDT and SSDT26 (AE_ALREADY_EXISTS, cosmetic); `_TRT` is empty.
 - `intel-hid INTC10CC: failed to get button capability`, `ucsi GET_CURRENT_CAM failed`: cosmetic.
+
+### 3.9 Kernel 7.3 (2026-10-22, `linux-cachyos` 7.3.0-2 and 7.3.0-3)
+
+- Fixed upstream: sound comes up with the stock kernel (the ghost-RT722 quirk and the CS35L56 OT25 DAI are both in 7.3), so `audio-ghost-rt722` and `audio-cs35l56-ot25` are not needed on 7.3.
+- Still needed, nothing relevant changed in 7.3: the TCSS power request for Port B (`display-edp2-tcss`; v2 has had no review yet), the mac80211 deauthentication on PMF roams (`wifi-roam-deauth`), the Duo keyboard in `hid-asus` (7.3 only added the MyASUS `0x86` and S-key `0x5f` codes), the ASUS ISH firmware (linux-firmware 20261019 has Dell, HP and Lenovo PTL images only), Early Transport off (no ET change in 7.3) and DSC for 10 bpc (7.3 prefers DSC over 6 bpc only for HDMI sinks). Every patch applies to 7.3.0 unchanged.
+- Changes that needed work here:
+  - CachyOS tags releases with the `.0` (`cachyos-7.3.0-2`), release candidates without it (`cachyos-7.3-rc6-1`). The DKMS source fetch looked for `cachyos-7.3-*`. It now takes the tag of the package release.
+  - pacman 7.1 runs hooks and scriptlets in a network namespace with only a loopback interface (`NetworkAccess` in alpm-hooks(5)). The DKMS hook could not fetch sources (`Failed to connect to github.com port 443 after 1 ms`), so the patched xe and mac80211 were not built for 7.3.0-2. Each module now installs a pacman hook that may use the network and fetches the sources just before DKMS builds.
+  - The UCSI debugfs `response` grew from 128 to 192 bits; the charger helper of `desktop-power-widget` accepts both.
+  - `system_wq` is deprecated (warning at the first use); `hid-asus` uses `system_percpu_wq`.
+- New: on the first 7.3.0 boot (stock xe, keyboard on Bluetooth) the display froze on the login screen for 44 minutes: `DMC wakelock ack timed out` while leaving DC states for an atomic commit, `Unexpected DBuf power power state (0x00000000, expected 0x0000000f)`, then `flip_done timed out` on pipes A and B and repeated wakelock timeouts. The same DMC firmware (v2.36) had no such error in any earlier boot, and the DMC wakelock code is unchanged between 7.2.11 and 7.3. Related 7.3 changes: `PIPEDMC_ERROR` and the GTT/ATS fault interrupts are now enabled on display version 30, and the DC state write check masks the CMTG status bits. Not reproduced in the following boots.
 
 ## 4. Comparison with Dell XPS / Omarchy claims
 
@@ -260,6 +274,7 @@ Measured over 30 s idle on battery: `duo-rotate`, `zenbook-duo-profile-sync` and
 - Residency (PMC counters): S0i2.1 for practically the whole sleep, package C10 throughout; **S0i2.2 never**. `/sys/power/suspend_stats/last_hw_sleep` read only 258 s because that 32-bit microsecond counter wraps every ~71.6 min; use `pmc_core/substate_residencies` instead.
 - With `pmc_core/lpm_latch_mode` set to `S0i2.1`, the S0i2.2-only requirements still unmet at S0i2.1 entry are `AON2_OFF`, `AON5_OFF`, `XTAL_AGGR_OFF` and `SOC_PLL_OFF`: the crystal and an always-on domain stay up.
 - 60 s `rtcwake -m freeze` tests, each still 0 s of S0i2.2: keyboard docked; keyboard detached; Wi-Fi + Bluetooth blocked (`rfkill`); sensor hub driver removed (`intel_ish_ipc`); MEI drivers removed (`mei_gsc_proxy`, `mei_me`, `mei`).
+- Wake loop with the lid closed over the docked keyboard (seen from 2026-10-14): the keyboard (USB `0b05:1cd7`, port 3-6) keeps remote wakeup enabled and wakes the laptop every 10–60 s; KDE suspends it again about 10 s later. 134 suspend cycles in one hour in one boot, 18 in ten minutes in another; the wakeups are charged to the xHCI controller. `power-kbd-lid-wake` turns the keyboard's USB wakeup off before a lid-closed suspend and back on after resume. Since 2026-10-16: five lid-closed sleeps with the keyboard docked and no keyboard wake; the longest one that resumed lasted 5 h 25 min, battery 16% → 13%. One extra wake came with an ASUS EC event (`asus_wmi: Unknown key code 0xb0`).
 - `pmc_core/s0ix_blocker` deltas over a sleep point at the CSE (Intel ME): `CSE_PGD0_PG_STS`, `CSE_VNN_REQ_STS` and `CSMERTC_VNN_REQ_STS` keep counting even with the MEI drivers unloaded. The CSE firmware keeps its domain powered by itself; nothing on the Linux side controls it. Whether Windows reaches S0i2.2 on this model is not known.
 
 ## 8. Module status and roadmap

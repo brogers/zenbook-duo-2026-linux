@@ -18,13 +18,14 @@ for d in /sys/kernel/debug/usb/ucsi/*/; do [[ -w $d/command ]] && dir=$d && brea
 [[ -n $dir ]] || exit 0
 
 # ucsi CMD: run a UCSI command, sets lo/hi to the low/high 64 bits of its response
+# (128 bits up to 7.2; 7.3 prints 192 bits, an extra 64-bit word in front)
 ucsi() {
 	local r
 	echo "$1" >"$dir/command" 2>/dev/null || return 1
 	r=$(cat "$dir/response" 2>/dev/null) || return 1
-	[[ $r =~ ^0x[0-9a-f]{32}$ ]] || return 1
-	hi=$((16#${r:2:16}))
-	lo=$((16#${r:18:16}))
+	[[ $r =~ ^0x([0-9a-f]{16})?([0-9a-f]{16})([0-9a-f]{16})$ ]] || return 1
+	hi=$((16#${BASH_REMATCH[2]}))
+	lo=$((16#${BASH_REMATCH[3]}))
 }
 
 result() {

@@ -51,6 +51,13 @@ status_label() {
 	printf '%s%-*s%s' "$color" "$2" "$text" "$C_RESET"
 }
 
+# A kernel update removes the running kernel's modules: DKMS checks then look at a
+# kernel that is gone, so say so instead of reporting broken modules.
+running_kernel_check() {
+	[[ -d /usr/lib/modules/$(uname -r) ]] ||
+		warn "kernel $(uname -r) is running but was updated away: reboot into the new kernel, then check again"
+}
+
 usage() {
 	cat <<EOF
 ${C_BOLD}duo${C_RESET} - Linux fixes for the ASUS Zenbook Duo UX8407AA, as revertible modules
@@ -73,6 +80,7 @@ EOF
 cmd_list() {
 	local dir rc applied krel n=0 healthy=0 todo=()
 	krel="$(uname -r)"
+	running_kernel_check
 	printf '%s%-28s %-9s %-9s %-6s %-9s %-10s %s%s\n' "$C_BOLD" MODULE CATEGORY SEVERITY RISK APPLIED STATE SUMMARY "$C_RESET"
 	while read -r dir; do
 		module_load "$dir"
@@ -100,6 +108,7 @@ cmd_list() {
 
 cmd_status() {
 	local dir ids=("$@")
+	running_kernel_check
 	((${#ids[@]})) || mapfile -t ids < <(module_dirs | xargs -n1 basename)
 	for id in "${ids[@]}"; do
 		dir="$(find_module "$id")"

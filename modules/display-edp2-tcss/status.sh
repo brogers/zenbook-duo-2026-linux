@@ -3,7 +3,9 @@
 
 param=/sys/module/xe/parameters/zenbook_duo_edp2_tcss
 if [[ ! -e $param ]]; then
-	if dkms status zenbook-duo-xe 2>/dev/null | grep -q "$(uname -r).*installed"; then
+	if [[ ! -d /usr/lib/modules/$(uname -r) ]]; then
+		info "the running kernel was updated: the patched xe loads after a reboot"
+	elif dkms status zenbook-duo-xe 2>/dev/null | grep -q "$(uname -r).*installed"; then
 		info "patched xe built for $(uname -r); reboot pending"
 	else
 		warn "patched xe not built for $(uname -r) (see: dkms status zenbook-duo-xe)"
