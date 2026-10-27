@@ -26,7 +26,7 @@ upower -i "$(upower -e | grep keyboard_dev)" | grep percentage   # over Bluetoot
 `sudo ./duo revert keyboard-hid-asus`, then reboot. The `dkms` package stays installed.
 
 ## Notes
-- Zephyrus Duo GX651AX: verified docked over USB (brightness, mute/volume, hotkeys-first top row). Its descriptor already declares `0x5a` as an array, so the descriptor fix-up does not apply. Bluetooth and the Zephyrus-only keys (AURA, F7–F12, M1–M4) are untested.
+- Zephyrus Duo GX651AX: verified docked over USB and over Bluetooth (brightness, mute/volume, hotkeys-first top row). Its descriptor already declares `0x5a` as an array, so the descriptor fix-up does not apply. The Zephyrus-only keys (AURA, F7–F12, M1–M4) are untested.
 - Kernels: 7.2.x and 7.3.x. `dkms/src/7.3` is the 7.3.0 `hid-asus` plus the Duo changes (7.3 itself added the MyASUS `0x86` and S-key `0x5f` codes, not the Duo IDs). 7.4 and later need a new source copy until the support is upstream.
 - Upstream: no Duo IDs in mainline `hid-asus`; submission is still to be done.
 - Over Bluetooth the keyboard must be paired first; after that the backlight and keys work detached too.
