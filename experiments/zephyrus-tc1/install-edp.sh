@@ -3,10 +3,10 @@
 # With the edited VBT (install-vbt.sh) TC1 is an eDP connector, and it only
 # shows a picture with Panel Replay and LOBF (ALPM link off between frames)
 # both off. Panel Replay has a module parameter; LOBF only has a debugfs flag,
-# set by a udev rule when the connector appears (read at the next modeset,
-# which is Hyprland's first one: xe has no fbdev with zephyrus_no_fbdev=1).
-# Undo: rm /etc/udev/rules.d/90-zephyrus-duo-lobf.rules /usr/local/lib/zephyrus-duo/lobf-off,
-# put back the KERNEL_CMDLINE line without the vbt/psr options, limine-update
+# set by a udev rule when the connector appears and read at the next modeset
+# (the console lights the panel before that, with LOBF still on: brief
+# "link not ok" retrains at boot, then Hyprland's modeset has it off).
+# revert.sh undoes this and install-vbt.sh.
 set -euo pipefail
 
 [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
@@ -34,11 +34,12 @@ cat >/etc/udev/rules.d/90-zephyrus-duo-lobf.rules <<'EOF'
 ACTION=="add", SUBSYSTEM=="drm", KERNEL=="card*-eDP-*", DRIVERS=="xe", RUN+="/usr/local/lib/zephyrus-duo/lobf-off %k"
 EOF
 
-cat >/etc/limine-entry-tool.d/zephyrus-duo-dp1-off.conf <<'EOF'
-# Zephyrus Duo GX651AX: patched xe from experiments/zephyrus-tc1 (keep the
-# bottom panel's Type-C PHY TC1 connected, no xe fbdev), the edited VBT that
-# makes TC1 an eDP connector, and no PSR/Panel Replay (black panel otherwise).
-KERNEL_CMDLINE[default]+=" xe.zephyrus_tc_legacy_keep=1 xe.zephyrus_no_fbdev=1"
+# the earlier DP-1 experiments' drop-in
+rm -f /etc/limine-entry-tool.d/zephyrus-duo-dp1-off.conf
+cat >/etc/limine-entry-tool.d/zephyrus-duo-edp.conf <<'EOF'
+# zenbook-duo-2026-linux (experiments/zephyrus-tc1): the edited VBT that makes
+# the Zephyrus Duo's bottom panel (Type-C port TC1) an eDP connector, and no
+# PSR/Panel Replay (black panel otherwise).
 KERNEL_CMDLINE[default]+=" xe.vbt_firmware=zephyrus-duo/vbt-tc1-edp.bin xe.enable_psr=0 xe.enable_panel_replay=0"
 EOF
 limine-update
