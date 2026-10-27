@@ -1,0 +1,17 @@
+[Unit]
+Description=Zephyrus Duo: bottom panel (DP-1) on after login, off before Hyprland exits
+# Ordered after Hyprland, so it stops before Hyprland does: DP-1 is then off when
+# the console takes the screens back, and its takeover is a plain enable.
+After=wayland-wm@hyprland.desktop.service graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/bin/zephyrus-duo-dp1-enable
+ExecStop=%h/.local/bin/zephyrus-duo-dp1-enable --off
+TimeoutStartSec=90
+TimeoutStopSec=40
+
+[Install]
+WantedBy=graphical-session.target

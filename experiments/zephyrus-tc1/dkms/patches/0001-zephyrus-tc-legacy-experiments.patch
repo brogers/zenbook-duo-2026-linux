@@ -1,0 +1,61 @@
+--- a/drivers/gpu/drm/i915/display/intel_tc.c	2026-10-26 22:42:34.470242876 -0400
++++ b/drivers/gpu/drm/i915/display/intel_tc.c	2026-10-26 22:42:50.261316905 -0400
+@@ -3,7 +3,9 @@
+  * Copyright © 2019 Intel Corporation
+  */
+ 
++#include <linux/delay.h>
+ #include <linux/iopoll.h>
++#include <linux/moduleparam.h>
+ 
+ #include <drm/drm_print.h>
+ 
+@@ -24,6 +26,21 @@
+ #include "intel_modeset_lock.h"
+ #include "intel_tc.h"
+ 
++/*
++ * Experiments for a panel wired to a legacy TypeC port (ASUS Zephyrus Duo
++ * GX651AX, TC1): the first enable after boot works, an enable that follows a
++ * disable (PHY handed back and taken again within a few ms) gets no vblank.
++ */
++static bool zephyrus_tc_legacy_keep;
++module_param(zephyrus_tc_legacy_keep, bool, 0644);
++MODULE_PARM_DESC(zephyrus_tc_legacy_keep,
++		 "Keep the PHY of a legacy TypeC port connected while the port is idle (default: false)");
++
++static unsigned int zephyrus_tc_connect_delay_ms;
++module_param(zephyrus_tc_connect_delay_ms, uint, 0644);
++MODULE_PARM_DESC(zephyrus_tc_connect_delay_ms,
++		 "Wait this long after connecting the PHY of a legacy TypeC port (default: 0)");
++
+ enum tc_port_mode {
+ 	TC_PORT_DISCONNECTED,
+ 	TC_PORT_TBT_ALT,
+@@ -1488,6 +1505,12 @@
+ 	}
+ 
+ 	drm_WARN_ON(display->drm, !connected);
++
++	if (connected && tc->mode == TC_PORT_LEGACY && zephyrus_tc_connect_delay_ms) {
++		drm_dbg_kms(display->drm, "Port %s: waiting %u ms after connecting the legacy PHY\n",
++			    tc->port_name, zephyrus_tc_connect_delay_ms);
++		msleep(zephyrus_tc_connect_delay_ms);
++	}
+ }
+ 
+ static void tc_phy_disconnect(struct intel_tc_port *tc)
+@@ -1895,8 +1918,12 @@
+ 
+ 	mutex_lock(&tc->lock);
+ 
+-	if (!tc->link_refcount)
++	if (zephyrus_tc_legacy_keep && tc->mode == TC_PORT_LEGACY) {
++		drm_dbg_kms(to_intel_display(tc->dig_port)->drm,
++			    "Port %s: keeping the legacy PHY connected\n", tc->port_name);
++	} else if (!tc->link_refcount) {
+ 		intel_tc_port_update_mode(tc, 1, true);
++	}
+ 
+ 	mutex_unlock(&tc->lock);
+ }

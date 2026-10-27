@@ -1,0 +1,44 @@
+--- a/drivers/gpu/drm/i915/display/intel_cx0_phy.c	2026-10-26 23:00:27.974437369 -0400
++++ b/drivers/gpu/drm/i915/display/intel_cx0_phy.c	2026-10-26 23:00:27.982150612 -0400
+@@ -3,8 +3,10 @@
+  * Copyright © 2023 Intel Corporation
+  */
+ 
++#include <linux/delay.h>
+ #include <linux/log2.h>
+ #include <linux/math64.h>
++#include <linux/moduleparam.h>
+ 
+ #include <drm/drm_print.h>
+ 
+@@ -3476,6 +3478,16 @@
+ 	return XELPDP_P4PG_STATE_DISABLE;
+ }
+ 
++/*
++ * Experiment for a panel wired to a legacy TypeC port (ASUS Zephyrus Duo
++ * GX651AX, TC1): enabling the PLL again a few ms after disabling it leaves the
++ * pipe without vblanks.
++ */
++static unsigned int zephyrus_pll_off_delay_ms;
++module_param(zephyrus_pll_off_delay_ms, uint, 0644);
++MODULE_PARM_DESC(zephyrus_pll_off_delay_ms,
++		 "Wait this long after disabling the PLL of a legacy TypeC port (default: 0)");
++
+ static void intel_cx0pll_disable(struct intel_encoder *encoder)
+ {
+ 	struct intel_display *display = to_intel_display(encoder);
+@@ -3524,6 +3536,13 @@
+ 		     XELPDP_FORWARD_CLOCK_UNGATE, 0);
+ 
+ 	intel_cx0_phy_transaction_end(encoder, wakeref);
++
++	if (zephyrus_pll_off_delay_ms &&
++	    intel_tc_port_in_legacy_mode(enc_to_dig_port(encoder))) {
++		drm_dbg_kms(display->drm, "Port %c: waiting %u ms after disabling the PLL\n",
++			    phy_name(phy), zephyrus_pll_off_delay_ms);
++		msleep(zephyrus_pll_off_delay_ms);
++	}
+ }
+ 
+ static bool intel_cx0_pll_is_enabled(struct intel_encoder *encoder)
