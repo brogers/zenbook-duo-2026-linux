@@ -15,7 +15,7 @@ Makes the bottom screen of the ASUS ROG Zephyrus Duo 2026 (board GX651AX, Panthe
 - `install-edp.sh`:
   - adds `xe.vbt_firmware=zephyrus-duo/vbt-tc1-edp.bin xe.enable_psr=0 xe.enable_panel_replay=0` to the kernel command line (`/etc/limine-entry-tool.d/zephyrus-duo-edp.conf`);
   - installs `/etc/udev/rules.d/90-zephyrus-duo-lobf.rules`, which runs `/usr/local/lib/zephyrus-duo/lobf-off` when an xe eDP connector appears. That sets `i915_edp_lobf_debug`, and the flag applies from the next modeset on. The kernel console lights the panel earlier, with LOBF still on: a few `8b/10b link not ok, retraining` lines at boot, and the LUKS prompt may not show on the bottom screen (it does on the top one). Hyprland's first modeset has LOBF off.
-- Plymouth's reboot/poweroff screens are masked (`systemctl mask plymouth-{reboot,poweroff,halt,kexec}.service`): with the panel as DP-1 they hung the shutdown. Not retested in eDP mode.
+- Plymouth's reboot/poweroff screens need nothing: with the panel as DP-1 they hung the shutdown (they had to be masked), in eDP mode they work, with the keyboard docked or lifted.
 - Hyprland: `~/.config/hypr/monitors.lua` leaves monitors at their defaults when the cmdline has `xe.vbt_firmware=`.
 
 ## Check
