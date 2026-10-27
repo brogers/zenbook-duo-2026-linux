@@ -1,0 +1,12 @@
+#!/bin/sh
+# zephyrus-lobf-off CONNECTOR (e.g. card0-eDP-2): turn LOBF (ALPM link off between
+# frames) off on an xe eDP connector; the Zephyrus Duo's bottom panel stays black with it.
+# xe reads the flag at the connector's next modeset. Run by 90-zenbook-duo-zephyrus-lobf.rules.
+name=${1#card*-}
+for i in 1 2 3 4 5 6 7 8 9 10; do
+	for f in /sys/kernel/debug/dri/*/"$name"/i915_edp_lobf_debug; do
+		[ -e "$f" ] && { echo 1 >"$f"; logger -t zenbook-duo-lobf "LOBF off on $name"; exit 0; }
+	done
+	sleep 0.2
+done
+logger -t zenbook-duo-lobf "no i915_edp_lobf_debug for $name"

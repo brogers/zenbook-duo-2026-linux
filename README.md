@@ -85,6 +85,8 @@ Made for the **2026 ASUS Zenbook Duo, model UX8407AA** (Intel Core Ultra Series 
 **Not for the older Zenbook Duo models** (UX8406 from 2024/2025, UX481/UX482): they use different hardware, and the fixes refuse to install there.
 Most fixes also work on other distributions and desktops; see [compatibility](#kernel-and-distribution-compatibility).
 
+**ASUS ROG Zephyrus Duo 2026 (GX651AX):** two modules of its own, `display-zephyrus-bottom-edp` (bottom screen) and `wifi-zephyrus-dock-toggle` (Wi-Fi toggled by docking the keyboard). Each module declares the board it is for (`DMI_BOARD` in `module.conf`); on a GX651AX the Zenbook modules show `n/a`, so `sudo ./duo apply --recommended` applies only these two.
+
 ## Details
 
 <details>
@@ -128,7 +130,7 @@ Details, logs and upstream references for each line: [`docs/hardware-report.md`]
 
 | Check | Expected | Why it matters |
 |---|---|---|
-| Model (DMI) | `ASUS Zenbook Duo UX8407AA` | Modules refuse other boards (`DUO_FORCE=1` overrides) |
+| Model (DMI) | `ASUS Zenbook Duo UX8407AA` | Each module refuses boards other than its `DMI_BOARD` (`DUO_FORCE=1` overrides) |
 | CPU | Intel Core Ultra Series 3 (Panther Lake, family 6 model 204) | `xe` display, ISH, power tables |
 | Touchscreens | ACPI `RAYD0001` (top) and `RAYD0002` (bottom) | `touchscreen-hid`, touch mapping |
 | Audio | SoundWire, PCI subsystem `1043:1444`: CS42L43 + 2× CS35L56 | `audio-ghost-rt722` matches this board |

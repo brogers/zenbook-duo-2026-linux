@@ -1,0 +1,3 @@
+# zenbook-duo-2026-linux (display-zephyrus-bottom-edp): the Zephyrus Duo's bottom panel
+# (eDP on Type-C port TC1, via the edited VBT) stays black with LOBF on.
+ACTION=="add", SUBSYSTEM=="drm", KERNEL=="card*-eDP-*", DRIVERS=="xe", RUN+="/usr/lib/zenbook-duo/zephyrus-lobf-off %k"

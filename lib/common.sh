@@ -88,7 +88,15 @@ installed_kernels() {
 dmi() { cat "/sys/class/dmi/id/$1" 2>/dev/null; }
 
 is_supported_machine() {
-	[[ "$(dmi sys_vendor)" == "ASUS"* && "$(dmi board_name)" == UX8407* ]]
+	local board
+	board="$(dmi board_name)"
+	[[ "$(dmi sys_vendor)" == "ASUS"* && ($board == UX8407* || $board == GX651AX) ]]
+}
+
+# Is the loaded module meant for this board? DMI_BOARD is a glob (default UX8407AA).
+module_applies_to_machine() {
+	# shellcheck disable=SC2053 # DMI_BOARD is a pattern
+	[[ "$(dmi sys_vendor)" == "ASUS"* && "$(dmi board_name)" == $DMI_BOARD ]]
 }
 
 # Module metadata ---------------------------------------------------------------

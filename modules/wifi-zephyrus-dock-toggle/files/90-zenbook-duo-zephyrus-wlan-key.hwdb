@@ -1,0 +1,5 @@
+# zenbook-duo-2026-linux (wifi-zephyrus-dock-toggle): the Zephyrus Duo's firmware sends
+# KEY_WLAN (scan code 0x5e) on "Asus WMI hotkeys" whenever the keyboard docks or lifts,
+# and the kernel toggles Wi-Fi on it. The keyboard has no wireless key, so drop the code.
+evdev:name:Asus WMI hotkeys:dmi:*:rnGX651AX:*
+ KEYBOARD_KEY_5e=reserved

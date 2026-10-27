@@ -8,6 +8,7 @@
 
 # Deferred global work, executed once at the end of a transaction.
 DUO_NEED_UDEV_RELOAD=0
+DUO_NEED_HWDB_UPDATE=0
 DUO_NEED_SYSTEMD_RELOAD=0
 DUO_NEED_INITRAMFS=0
 DUO_NEED_BOOTLOADER=0
@@ -30,6 +31,7 @@ _record() {
 # soundwire-bus live in the initramfs, and xe options go on the kernel cmdline.
 _mark_for_path() {
 	case "$1" in
+	/etc/udev/hwdb.d/* | /usr/lib/udev/hwdb.d/*) DUO_NEED_HWDB_UPDATE=1 DUO_NEED_UDEV_RELOAD=1 ;;
 	/etc/udev/* | /usr/lib/udev/*) DUO_NEED_UDEV_RELOAD=1 ;;
 	/etc/systemd/* | /usr/lib/systemd/*) DUO_NEED_SYSTEMD_RELOAD=1 ;;
 	esac
@@ -262,6 +264,8 @@ duo_finish_transaction() {
 	for u in "${DUO_RESTART_UNITS[@]}"; do
 		systemctl try-restart "$u" && ok "restarted $u"
 	done
+	# the hwdb is compiled: a new or removed .hwdb file only counts after an update
+	((DUO_NEED_HWDB_UPDATE)) && systemd-hwdb update
 	((DUO_NEED_UDEV_RELOAD)) && udevadm control --reload && udevadm trigger --action=change >/dev/null 2>&1
 	((DUO_NEED_BOOTLOADER)) && duo_sync_bootloader
 	((DUO_NEED_INITRAMFS)) && duo_regen_initramfs

@@ -5,6 +5,9 @@ device into a second internal panel (eDP, handle LFP2).
 The ASUS Zephyrus Duo GX651AX wires its bottom OLED panel to TC1 in legacy
 mode, but its VBT lists that port as an external DisplayPort, so xe drives an
 eDP panel as DP. Load the result with xe.vbt_firmware=<file under /lib/firmware>.
+
+A VBT that is edited already (the one debugfs shows while xe.vbt_firmware is in
+effect) is copied unchanged, so the edit can be re-run at any time.
 """
 import struct
 import sys
@@ -54,9 +57,15 @@ def main(src, dst):
             tc1 = c
     assert tc1 is not None, "no DP-F (TC1) child device"
     assert DEVICE_HANDLE_LFP1 in handles, "no LFP1 child: expected the port A eDP"
-    assert DEVICE_HANDLE_LFP2 not in handles, "an LFP2 child exists already"
 
     handle, dtype = struct.unpack_from("<HH", vbt, tc1)
+    if (handle == DEVICE_HANDLE_LFP2 and dtype & DEVICE_TYPE_INTERNAL_CONNECTOR
+            and (vbt[tc1 + DP_MAX_LANE_COUNT_BYTE] >> 6) + 1 == TC1_LANES):
+        print("TC1 child is an internal 2-lane panel already: copied unchanged")
+        open(dst, "wb").write(vbt)
+        return
+    assert DEVICE_HANDLE_LFP2 not in handles, "an LFP2 child exists already"
+
     struct.pack_into("<HH", vbt, tc1, DEVICE_HANDLE_LFP2, dtype | DEVICE_TYPE_INTERNAL_CONNECTOR)
     print(f"TC1 child: handle {handle:#06x} -> {DEVICE_HANDLE_LFP2:#06x}, "
           f"type {dtype:#06x} -> {dtype | DEVICE_TYPE_INTERNAL_CONNECTOR:#06x}")

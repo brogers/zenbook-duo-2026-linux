@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# duo - modular hardware patch manager for the ASUS Zenbook Duo (UX8407AA) on Linux.
+# duo - modular hardware patch manager for the ASUS Zenbook Duo (UX8407AA) on Linux
+# (and a few modules for the ROG Zephyrus Duo GX651AX; see DMI_BOARD in module.conf).
 # Run `duo help` for usage.
 
 set -euo pipefail
@@ -30,6 +31,7 @@ is_applied() { [[ -f $DUO_STATE_DIR/modules/$1/applied ]]; }
 # Run a module's status script. Exit codes: 0 healthy/fixed, 1 needs fix, 2 not applicable, 3 unknown.
 module_status() {
 	local dir="$1" rc=0
+	( module_load "$dir" && module_applies_to_machine ) || return 2
 	[[ -f $dir/status.sh ]] || return 3
 	(
 		module_load "$dir"
@@ -114,6 +116,10 @@ cmd_status() {
 		dir="$(find_module "$id")"
 		module_load "$dir"
 		log "$MOD_ID - $NAME"
+		if ! module_applies_to_machine; then
+			info "not for this machine ($(dmi board_name); module: $DMI_BOARD)"
+			continue
+		fi
 		if ! module_applies_to_kernel "$(uname -r)"; then
 			info "not applicable to kernel $(uname -r) (range: ${KERNEL_MIN:-any} .. <${KERNEL_MAX:-any})"
 			continue
@@ -146,8 +152,8 @@ apply_one() {
 	local dir="$1"
 	module_load "$dir"
 	log "applying $MOD_ID - $NAME"
-	if ! is_supported_machine; then
-		warn "this machine is $(dmi sys_vendor) $(dmi board_name), modules target UX8407AA"
+	if ! module_applies_to_machine; then
+		warn "this machine is $(dmi sys_vendor) $(dmi board_name), $MOD_ID targets $DMI_BOARD"
 		[[ ${DUO_FORCE:-0} == 1 ]] || die "refusing (set DUO_FORCE=1 to override)"
 	fi
 	if [[ -n $KERNEL_MAX || -n $KERNEL_MIN ]] && ! module_applies_to_kernel "$(uname -r)"; then
@@ -159,7 +165,7 @@ apply_one() {
 		# shellcheck disable=SC1091
 		source "$dir/apply.sh"
 		# export deferred flags from the subshell
-		declare -p DUO_NEED_UDEV_RELOAD DUO_NEED_SYSTEMD_RELOAD DUO_NEED_INITRAMFS DUO_NEED_BOOTLOADER DUO_NEED_REBOOT \
+		declare -p DUO_NEED_UDEV_RELOAD DUO_NEED_HWDB_UPDATE DUO_NEED_SYSTEMD_RELOAD DUO_NEED_INITRAMFS DUO_NEED_BOOTLOADER DUO_NEED_REBOOT \
 			| sed "s/^declare -[^ ]* /declare -g /" >"$DUO_STATE_DIR/.pending.$MOD_ID"
 	) || {
 		err "apply of $MOD_ID failed; reverting partial changes"
