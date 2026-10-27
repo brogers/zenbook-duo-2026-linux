@@ -4,13 +4,13 @@
 # hid-asus sends 64 bytes, the 16 byte report 0x5a then times out with -110), the
 # 0x5a hotkey descriptor turned into an array, the missing Duo key codes, and the
 # keyboard's battery report (5a 3d) kept out of the hotkeys.
-duo_dkms_install "$MOD_DIR/dkms" zenbook-duo-hid-asus 1.5
+duo_dkms_install "$MOD_DIR/dkms" zenbook-duo-hid-asus 1.6
 
 # switch the running kernel over: reload hid-asus, rebind the ASUS control interface
 if modinfo -n hid_asus 2>/dev/null | grep -q updates/dkms; then
 	modprobe -r hid_asus 2>/dev/null || true
 	modprobe hid_asus || true
-	for d in /sys/bus/hid/devices/0003:0B05:1CD7.* /sys/bus/hid/devices/0005:0B05:1CD8.*; do
+	for d in /sys/bus/hid/devices/0003:0B05:1CD7.* /sys/bus/hid/devices/0005:0B05:1CD8.* /sys/bus/hid/devices/0003:0B05:1CE6.* /sys/bus/hid/devices/0005:0B05:1CE7.*; do
 		[[ -e $d ]] || continue
 		od -An -tx1 -v "$d/report_descriptor" | tr -d '\n' | grep -q '06 31 ff 09 76' || continue
 		drv="$(basename "$(readlink "$d/driver" 2>/dev/null)" 2>/dev/null)"
