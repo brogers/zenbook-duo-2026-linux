@@ -1,23 +1,12 @@
 #!/bin/sh
 # zephyrus-lobf-off CONNECTOR (e.g. card0-eDP-2): turn LOBF (ALPM link off between
-# frames) off on an xe eDP connector; the Zephyrus Duo's panels stay black with it.
-# xe reads the flag at the connector's next modeset. Run by 90-zenbook-duo-zephyrus-lobf.rules,
-# in the initramfs too (before Plymouth draws the LUKS prompt), where debugfs is not mounted
-# and there is no syslog: log to the kernel log instead.
+# frames) off on an xe eDP connector; the Zephyrus Duo's bottom panel stays black with it.
+# xe reads the flag at the connector's next modeset. Run by 90-zenbook-duo-zephyrus-lobf.rules.
 name=${1#card*-}
-log() {
-	if [ -d /new_root ]; then echo "<5>zenbook-duo-lobf: $1" >/dev/kmsg; else logger -t zenbook-duo-lobf "$1"; fi
-}
-mounted=
-if [ ! -d /sys/kernel/debug/dri ]; then
-	mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null && mounted=1
-fi
-done=
 for i in 1 2 3 4 5 6 7 8 9 10; do
 	for f in /sys/kernel/debug/dri/*/"$name"/i915_edp_lobf_debug; do
-		[ -e "$f" ] && { echo 1 >"$f"; done=1; break 2; }
+		[ -e "$f" ] && { echo 1 >"$f"; logger -t zenbook-duo-lobf "LOBF off on $name"; exit 0; }
 	done
 	sleep 0.2
 done
-[ -n "$mounted" ] && umount /sys/kernel/debug
-if [ -n "$done" ]; then log "LOBF off on $name"; else log "no i915_edp_lobf_debug for $name"; fi
+logger -t zenbook-duo-lobf "no i915_edp_lobf_debug for $name"
