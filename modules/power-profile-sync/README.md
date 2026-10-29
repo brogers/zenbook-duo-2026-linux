@@ -27,3 +27,15 @@ powerprofilesctl get; grep . /sys/class/platform-profile/*/profile
 ## Notes
 - Works on all kernels. Requires power-profiles-daemon.
 - Use it together with `power-dtt`: thermald applies the Whisper limits (PL1 20-30 W, PL2 35 W) once the firmware is in quiet mode.
+- Also applies to the ROG Zephyrus Duo GX651AX, which has the same two handlers. There it needs no `power-dtt`: the SoC slider's `low-power` caps the CPU by itself, and asus-wmi's `quiet` only slows the fans. Measured on 2026-10-28 on battery, all cores loaded, 30 s in (past the turbo burst; RAPL PL1/PL2 read 75/80 W in every profile):
+
+  | asus-wmi | SoC slider | CPU package | clock | temp | fan |
+  |---|---|---|---|---|---|
+  | performance | performance | 59.5 W | 3654 MHz | 87 C | 5100 rpm |
+  | balanced | balanced | 43.1 W | 3278 MHz | 75 C | 3400 rpm |
+  | quiet | low-power | 29.7 W | 2825 MHz | 66 C | 2800 rpm |
+  | quiet | balanced | 43.9 W | 3268 MHz | 77 C | 2900 rpm |
+  | balanced | low-power | 29.7 W | 2820 MHz | 66 C | 2700 rpm |
+
+  At idle the profiles draw the same (about 12 W from the battery, both panels on).
+- On the GX651AX, apply `power-zephyrus-asusd` too, or asusd switches the profile on every plug and unplug.

@@ -1,5 +1,6 @@
 #!/bin/bash
-# zenbook-duo-profile-sync: complete what power-profiles-daemon cannot do on the UX8407AA.
+# zenbook-duo-profile-sync: complete what power-profiles-daemon cannot do on the UX8407AA
+# (and the GX651AX, which has the same two handlers).
 #
 # The legacy platform_profile only offers the choices common to all handlers. asus-wmi
 # has "quiet", the Intel SoC Power Slider has "low-power", so neither survives and

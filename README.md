@@ -85,7 +85,7 @@ Made for the **2026 ASUS Zenbook Duo, model UX8407AA** (Intel Core Ultra Series 
 **Not for the older Zenbook Duo models** (UX8406 from 2024/2025, UX481/UX482): they use different hardware, and the fixes refuse to install there.
 Most fixes also work on other distributions and desktops; see [compatibility](#kernel-and-distribution-compatibility).
 
-**ASUS ROG Zephyrus Duo 2026 (GX651AX):** three modules of its own, `display-zephyrus-bottom-edp` (bottom screen), `wifi-zephyrus-dock-toggle` (Wi-Fi toggled by docking the keyboard) and `power-zephyrus-asusd` (asusd racing power-profiles-daemon on plug and unplug). Each module declares the board it is for (`DMI_BOARD` in `module.conf`); on a GX651AX the Zenbook modules show `n/a`, so `sudo ./duo apply --recommended` applies only these three.
+**ASUS ROG Zephyrus Duo 2026 (GX651AX):** three modules of its own, `display-zephyrus-bottom-edp` (bottom screen), `wifi-zephyrus-dock-toggle` (Wi-Fi toggled by docking the keyboard) and `power-zephyrus-asusd` (asusd racing power-profiles-daemon on plug and unplug); it also takes `power-profile-sync` from the Zenbook, so power-saver reaches the firmware's low-power mode. Each module declares the board it is for (`DMI_BOARD` in `module.conf`); on a GX651AX the Zenbook modules show `n/a`, so `sudo ./duo apply --recommended` applies only these.
 
 ## Details
 

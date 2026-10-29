@@ -3,5 +3,5 @@ systemctl is-active -q zenbook-duo-profile-sync || { warn "profile sync not runn
 if powerprofilesctl list 2>/dev/null | grep -q 'PlatformDriver:.*platform_profile'; then
 	warn "power-profiles-daemon still drives platform_profile: performance -> power-saver snaps back to balanced"; return 1
 fi
-ok "profile sync running (ppd=$(powerprofilesctl get), asus=$(cat /sys/class/platform-profile/platform-profile-0/profile), gpu=$(grep -o '\[[a-z_]*\]' /sys/class/drm/card0/device/tile0/gt0/freq0/power_profile))"
+ok "profile sync running (ppd=$(powerprofilesctl get), asus=$(cat /sys/class/platform-profile/platform-profile-0/profile), gpu=$(cat /sys/class/drm/card*/device/tile0/gt0/freq0/power_profile 2>/dev/null | grep -o '\[[a-z_]*\]' | head -1))"
 return 0
