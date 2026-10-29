@@ -159,6 +159,7 @@ struct asus_drvdata {
 	struct led_classdev duo_micmute_led;
 	int duo_init_runs;
 	bool duo_init_ready;
+	bool duo_gone;
 	unsigned long quirks;
 	struct hid_device *hdev;
 	struct input_dev *input;
@@ -1426,6 +1427,10 @@ static int asus_duo_micmute_set(struct led_classdev *led, enum led_brightness b)
 	struct asus_drvdata *drvdata = container_of(led, struct asus_drvdata, duo_micmute_led);
 	const u8 buf[FEATURE_KBD_REPORT_SIZE] = { FEATURE_KBD_REPORT_ID, 0xd0, 0x7c, b ? 1 : 0 };
 
+	/* the LED core turns the LED off on unregister, after this link is gone */
+	if (READ_ONCE(drvdata->duo_gone))
+		return 0;
+
 	return asus_kbd_set_report(drvdata->hdev, buf, sizeof(buf)) < 0 ? -EIO : 0;
 }
 
@@ -1623,6 +1628,7 @@ static void asus_remove(struct hid_device *hdev)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
 
+	WRITE_ONCE(drvdata->duo_gone, true);
 	if (drvdata->duo_init_ready)
 		cancel_delayed_work_sync(&drvdata->duo_init_work);
 

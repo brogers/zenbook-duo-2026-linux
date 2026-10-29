@@ -10,7 +10,7 @@ Makes the detachable keyboard's backlight, Fn keys, Fn-lock and mic-mute LED wor
 
 ## What it changes
 - Installs the `dkms` package if it is missing.
-- Registers and builds the DKMS package `zenbook-duo-hid-asus` version `1.5` (source copied to `/usr/src/zenbook-duo-hid-asus-1.5`), installed to `/updates/dkms`. It adds the Duo IDs (the touchpad stays on `hid-multitouch`), clamps feature reports to the device's report length, rewrites the `0x5a` hotkey descriptor, and adds the missing Duo key codes.
+- Registers and builds the DKMS package `zenbook-duo-hid-asus` version `1.6` (source copied to `/usr/src/zenbook-duo-hid-asus-1.6`), installed to `/updates/dkms`. It adds the Duo IDs (the touchpad stays on `hid-multitouch`), clamps feature reports to the device's report length, rewrites the `0x5a` hotkey descriptor, and adds the missing Duo key codes.
 - Drops the battery report before it reaches the hotkeys. The battery level on the desktop comes from BlueZ, which reads the keyboard's GATT Battery Service as soon as it connects over Bluetooth; UPower lists it as a keyboard and the Plasma battery applet shows it. The driver registers no battery of its own: the hotkey report carries no level until the next 1% change, and UPower hides BlueZ's entry while a kernel battery exists for the same keyboard.
 - Separate sources for 7.2.x and 7.3.x (`dkms/src/7.2`, `dkms/src/7.3`); `dkms.conf` limits builds to those series (`BUILD_EXCLUSIVE_KERNEL="^7\.[23]\."`). It is built only for kernels whose headers are installed.
 - Reloads `hid_asus` and rebinds the keyboard's ASUS control interface right away, so no reboot is normally needed (reboot if the backlight still does not respond).
