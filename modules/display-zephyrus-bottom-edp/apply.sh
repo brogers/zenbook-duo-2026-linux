@@ -2,7 +2,7 @@
 # Edit the VBT xe is using (stock, or edited by an earlier apply: the script then copies
 # it unchanged), load it with xe.vbt_firmware, turn Panel Replay off on the cmdline and
 # LOBF off through debugfs when the panel's connector appears. xe lives in the initramfs,
-# so the VBT has to be there too.
+# so the VBT has to be there too, and so does the LOBF rule (else the LUKS prompt is black).
 
 duo_pkg_install python
 
@@ -21,6 +21,7 @@ rm -rf "$work"
 duo_install_file "$MOD_DIR/files/zenbook-duo-zephyrus-vbt.conf" /etc/mkinitcpio.conf.d/zenbook-duo-zephyrus-vbt.conf
 duo_install_file "$MOD_DIR/files/zephyrus-lobf-off" /usr/lib/zenbook-duo/zephyrus-lobf-off 0755
 duo_install_file "$MOD_DIR/files/90-zenbook-duo-zephyrus-lobf.rules" /etc/udev/rules.d/90-zenbook-duo-zephyrus-lobf.rules
+duo_install_file "$MOD_DIR/files/zenbook-duo-zephyrus-lobf.initcpio" /etc/initcpio/install/zenbook-duo-zephyrus-lobf
 duo_cmdline_add xe.vbt_firmware=zenbook-duo/zephyrus-vbt-tc1-edp.bin xe.enable_psr=0 xe.enable_panel_replay=0
 duo_need_initramfs
 

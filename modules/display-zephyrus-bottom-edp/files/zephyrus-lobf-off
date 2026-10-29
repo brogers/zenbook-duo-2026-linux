@@ -1,12 +1,43 @@
 #!/bin/sh
 # zephyrus-lobf-off CONNECTOR (e.g. card0-eDP-2): turn LOBF (ALPM link off between
-# frames) off on an xe eDP connector; the Zephyrus Duo's bottom panel stays black with it.
-# xe reads the flag at the connector's next modeset. Run by 90-zenbook-duo-zephyrus-lobf.rules.
+# frames) off on an xe eDP connector; the Zephyrus Duo's panels stay black with it.
+# xe reads the flag at the connector's next modeset. Run by 90-zenbook-duo-zephyrus-lobf.rules,
+# in the initramfs too (before Plymouth draws the LUKS prompt), where debugfs is not mounted
+# and there is no syslog: log to the kernel log instead.
+#
+# Also clear what is left enabled in the panel itself: ASSR (alternate scrambler reset,
+# DPCD 0x10a) and Panel Replay (0x1b0-0x1b1) from the firmware, and the ALPM config (0x116)
+# from xe's first modeset, which enables LOBF (0x07) before this script can run. With ASSR
+# on, the panel descrambles garbage (out of sync, symbol errors: black or a bright random
+# pattern). It also latches DSC errors (0x20f) from that first modeset and stays black until
+# a modeset in which xe itself writes ALPM with AUX wake (0x01) to 0x116; xe only does that
+# when 0x116 differs, so 0x116 is cleared here (a DPMS off/on then brings the picture).
 name=${1#card*-}
+log() {
+	if [ -d /new_root ]; then echo "<5>zenbook-duo-lobf: $1" >/dev/kmsg; else logger -t zenbook-duo-lobf "$1"; fi
+}
+dpcd_write() { # AUX-DEV OFFSET BYTES (printf escapes, e.g. '\000\000')
+	printf "$3" | dd of="$1" bs=1 seek=$(($2)) conv=notrunc 2>/dev/null
+}
+for aux in /sys/class/drm/"$1"/drm_dp_aux*; do
+	[ -e "/dev/${aux##*/}" ] || continue
+	if dpcd_write "/dev/${aux##*/}" 0x10a '\000' && dpcd_write "/dev/${aux##*/}" 0x116 '\000' &&
+		dpcd_write "/dev/${aux##*/}" 0x1b0 '\000\000'; then
+		log "ASSR, ALPM and Panel Replay off in the $name panel"
+	else
+		log "could not write the $name panel's DPCD"
+	fi
+done
+mounted=
+if [ ! -d /sys/kernel/debug/dri ]; then
+	mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null && mounted=1
+fi
+done=
 for i in 1 2 3 4 5 6 7 8 9 10; do
 	for f in /sys/kernel/debug/dri/*/"$name"/i915_edp_lobf_debug; do
-		[ -e "$f" ] && { echo 1 >"$f"; logger -t zenbook-duo-lobf "LOBF off on $name"; exit 0; }
+		[ -e "$f" ] && { echo 1 >"$f"; done=1; break 2; }
 	done
 	sleep 0.2
 done
-logger -t zenbook-duo-lobf "no i915_edp_lobf_debug for $name"
+[ -n "$mounted" ] && umount /sys/kernel/debug
+if [ -n "$done" ]; then log "LOBF off on $name"; else log "no i915_edp_lobf_debug for $name"; fi
