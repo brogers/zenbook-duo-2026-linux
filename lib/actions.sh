@@ -8,7 +8,9 @@
 
 # Deferred global work, executed once at the end of a transaction.
 DUO_NEED_UDEV_RELOAD=0
+DUO_NEED_HWDB_UPDATE=0
 DUO_NEED_SYSTEMD_RELOAD=0
+DUO_NEED_USER_SYSTEMD_RELOAD=0
 DUO_NEED_INITRAMFS=0
 DUO_NEED_BOOTLOADER=0
 DUO_NEED_REBOOT=0
@@ -30,7 +32,9 @@ _record() {
 # soundwire-bus live in the initramfs, and xe options go on the kernel cmdline.
 _mark_for_path() {
 	case "$1" in
+	/etc/udev/hwdb.d/* | /usr/lib/udev/hwdb.d/*) DUO_NEED_HWDB_UPDATE=1 DUO_NEED_UDEV_RELOAD=1 ;;
 	/etc/udev/* | /usr/lib/udev/*) DUO_NEED_UDEV_RELOAD=1 ;;
+	/etc/systemd/user/* | /usr/lib/systemd/user/*) DUO_NEED_USER_SYSTEMD_RELOAD=1 ;;
 	/etc/systemd/* | /usr/lib/systemd/*) DUO_NEED_SYSTEMD_RELOAD=1 ;;
 	esac
 }
@@ -247,10 +251,15 @@ duo_regen_initramfs() {
 # Run deferred work once.
 duo_finish_transaction() {
 	((DUO_NEED_SYSTEMD_RELOAD)) && systemctl daemon-reload
+	# a running user manager sees new or changed user units only after a reload
+	if ((DUO_NEED_USER_SYSTEMD_RELOAD)) && [[ -n ${SUDO_USER:-} ]]; then
+		systemctl --user -M "$SUDO_USER@" daemon-reload 2>/dev/null || true
+	fi
 	local u
 	for u in "${DUO_RESTART_UNITS[@]}"; do
 		systemctl try-restart "$u" && ok "restarted $u"
 	done
+	((DUO_NEED_HWDB_UPDATE)) && systemd-hwdb update
 	((DUO_NEED_UDEV_RELOAD)) && udevadm control --reload && udevadm trigger --action=change >/dev/null 2>&1
 	((DUO_NEED_BOOTLOADER)) && duo_sync_bootloader
 	((DUO_NEED_INITRAMFS)) && duo_regen_initramfs
@@ -275,7 +284,8 @@ duo_revert_manifest() {
 			fi
 			_mark_for_path "$a"
 			# a removed drop-in only takes effect once its service restarts
-			[[ $a =~ /([^/]+\.service)\.d/[^/]+$ ]] && DUO_RESTART_UNITS+=("${BASH_REMATCH[1]}")
+			# (user services pick it up at the next login)
+			[[ $a =~ ^/etc/systemd/system/([^/]+\.service)\.d/[^/]+$ ]] && DUO_RESTART_UNITS+=("${BASH_REMATCH[1]}")
 			;;
 		unit-enable)
 			[[ $b == enabled ]] || { systemctl disable --now "$a" >/dev/null 2>&1; ok "disabled $a"; }

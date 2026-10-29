@@ -159,7 +159,7 @@ apply_one() {
 		# shellcheck disable=SC1091
 		source "$dir/apply.sh"
 		# export deferred flags from the subshell
-		declare -p DUO_NEED_UDEV_RELOAD DUO_NEED_SYSTEMD_RELOAD DUO_NEED_INITRAMFS DUO_NEED_BOOTLOADER DUO_NEED_REBOOT \
+		declare -p DUO_NEED_UDEV_RELOAD DUO_NEED_HWDB_UPDATE DUO_NEED_SYSTEMD_RELOAD DUO_NEED_USER_SYSTEMD_RELOAD DUO_NEED_INITRAMFS DUO_NEED_BOOTLOADER DUO_NEED_REBOOT \
 			| sed "s/^declare -[^ ]* /declare -g /" >"$DUO_STATE_DIR/.pending.$MOD_ID"
 	) || {
 		err "apply of $MOD_ID failed; reverting partial changes"
