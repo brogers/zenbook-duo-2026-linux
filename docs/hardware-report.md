@@ -164,6 +164,13 @@ Verified on hardware: laptop layout, upright (book) mode, touch, and the login s
 - Resolution: the descriptor gives 124.2 × 75.6 mm for 3911 × 2382 units (31.5 units/mm on both axes); the kernel rounds each axis on its own to 31 and 32, so up/down moved 3% less than left/right. An hwdb entry sets 31 on both.
 - Found on the way in libinput 1.32: `tp_process_msc()` returns early for `MSC_TIMESTAMP` instead of for everything else, so the Dell `AttrMscTimestamp=watch` fix never runs; the tools' `--set-plugin-path` adds the default paths instead of using the given one; the plugin API's `usages()` skips the highest code of every event type.
 
+#### 3.3.3 Touchpad acceleration (`touchpad-accel`, optional)
+
+- libinput's touchpad curve, measured on this touchpad at KDE speed 0.2 (screen mm per finger mm): 2.0–3.0 at 3–10 mm/s, 3.0 at 50 and 130 mm/s, 6.3 at 300 mm/s. Apple's Magic Trackpad 2 curve: 0.8–1.1, 2.7, 5.9, 10.9. Half of all motion frames in a recording of normal use were under 30 mm/s.
+- KWin 6.8 has only libinput's flat and adaptive profiles; custom curves are planned for Plasma 6.9 (KWin MR 6937). libinput's custom profile measures speed from one event's arrival time, so on Bluetooth the speed of a bunched report comes out 10–15× too high.
+- `touchpad-accel` preloads a library into `kwin_wayland` that replaces `libinput_event_pointer_get_dx()`/`_get_dy()` for `0b05:1cd7`/`0b05:1cd8` only, with IOHIDFamily's parametric acceleration and the MT2 curve table. An event within 1.5 scan periods of the previous one counts as one scan of motion. Against the touchpad's own scan time, 90% of gains are within ±13%, docked and on Bluetooth.
+- `kwin_wayland` has the file capability `CAP_SYS_NICE`, so ld.so runs it in secure-execution mode: preload paths are ignored, and only a bare name from `/usr/lib` with the set-user-ID bit is preloaded. A first install with a path silently did nothing.
+
 ### 3.4 Power and performance: the biggest win
 
 The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hardware-scan/dtt/`). Windows applies these tables; Linux did not:
@@ -308,6 +315,7 @@ Measured over 30 s idle on battery: `duo-rotate`, `zenbook-duo-profile-sync` and
 | P1 | Bluetooth keyboard | ✅ pairs; backlight and keys work |
 | P1 | `touchpad-palm`: palm rejection and disable-while-typing on the keyboard's touchpad | ✅ USB verified (DWT paired); Bluetooth to be confirmed |
 | P1 | `touchpad-motion`: no dropped motion on Bluetooth, equal axis resolution | ✅ 0 instead of 47 discards in a replayed recording |
+| P2 | `touchpad-accel` (optional): Apple's trackpad acceleration in KWin until Plasma 6.9 | ✅ loaded by KWin since 2026-10-28 |
 | P2 | `display-dpcd-backlight`: panel brightness over DPCD | ✅ |
 | P2 | `display-psr-et-off`: ghost cursor | ✅ |
 | P2 | `display-dsc-10bit`: 10-bit via DSC | ✅ bpp 18 → 30, PR SU stays on, no power cost (4.95 / 4.78 W) |
