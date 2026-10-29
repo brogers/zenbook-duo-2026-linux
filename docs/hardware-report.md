@@ -155,6 +155,15 @@ Verified on hardware: laptop layout, upright (book) mode, touch, and the login s
 - Fix: a libinput quirk `AttrTPKComboLayout=below` for `0b05:1cd7` and `0b05:1cd8`. An external touchpad+keyboard combo gets the same palm handling as an internal touchpad and pairs DWT with the keyboard of the same vendor/product (`palm: dwt activated with … Touchpad<->Asus Keyboard`).
 - Marking the devices internal instead (like libinput's ROG Flow Z13 quirk) would pair the keyboard with the lid switch: with the keyboard detached and the laptop closed on an external monitor, a key press would report the lid as open, and the touchpad would be disabled. The combo layout has neither effect.
 
+#### 3.3.2 Touchpad motion on Bluetooth and axis resolution (`touchpad-motion`)
+
+- The touchpad scans every 7.1 ms (141 Hz); the Bluetooth LE link has a connection event every 7.5 ms. About every 130 ms two reports leave in the same connection event and reach the host 0.4–0.8 ms apart.
+- libinput's jump detection divides the distance by that arrival gap, sees 10–40 mm per 12 ms frame (limit 20 mm), logs `kernel bug: Touch jump detected and discarded` and drops the motion. `libinput record` while moving the cursor: 43 discards in 30 s, ~2 mm of finger travel each, 4.3% of all motion. Docked (USB, 1 ms polling): none in 7 minutes.
+- Every report carries the touchpad's scan time (HID *Scan Time*, `MSC_TIMESTAMP`), 7.1 ms apart however the reports arrive. libinput ignores it except on a few Dell touchpads.
+- Fix: a libinput Lua plugin for `0b05:1cd8` turns libinput's jump detection off for that device and runs the same test on the scan time. Replaying the recording into a virtual device: 0 instead of 47 discards, 1789 mm of finger travel delivered instead of 1715 mm, no real jump missed.
+- Resolution: the descriptor gives 124.2 × 75.6 mm for 3911 × 2382 units (31.5 units/mm on both axes); the kernel rounds each axis on its own to 31 and 32, so up/down moved 3% less than left/right. An hwdb entry sets 31 on both.
+- Found on the way in libinput 1.32: `tp_process_msc()` returns early for `MSC_TIMESTAMP` instead of for everything else, so the Dell `AttrMscTimestamp=watch` fix never runs; the tools' `--set-plugin-path` adds the default paths instead of using the given one; the plugin API's `usages()` skips the highest code of every event type.
+
 ### 3.4 Power and performance: the biggest win
 
 The Intel DTT data vault in the BIOS (GDDV, 3131 bytes, LZMA) was decoded (`hardware-scan/dtt/`). Windows applies these tables; Linux did not:
@@ -298,6 +307,7 @@ Measured over 30 s idle on battery: `duo-rotate`, `zenbook-duo-profile-sync` and
 | P2 | `desktop-power-widget`: live power draw in the panel | ✅ |
 | P1 | Bluetooth keyboard | ✅ pairs; backlight and keys work |
 | P1 | `touchpad-palm`: palm rejection and disable-while-typing on the keyboard's touchpad | ✅ USB verified (DWT paired); Bluetooth to be confirmed |
+| P1 | `touchpad-motion`: no dropped motion on Bluetooth, equal axis resolution | ✅ 0 instead of 47 discards in a replayed recording |
 | P2 | `display-dpcd-backlight`: panel brightness over DPCD | ✅ |
 | P2 | `display-psr-et-off`: ghost cursor | ✅ |
 | P2 | `display-dsc-10bit`: 10-bit via DSC | ✅ bpp 18 → 30, PR SU stays on, no power cost (4.95 / 4.78 W) |
