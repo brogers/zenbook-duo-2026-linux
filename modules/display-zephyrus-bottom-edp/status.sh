@@ -18,8 +18,10 @@ if ((${#missing[@]})); then
 fi
 
 conn=""
+# the bottom panel is xe's eDP on TC1 (in hybrid mode xe also has the top one, on port A)
 for c in /sys/class/drm/card*-eDP-*; do
-	[[ $(basename "$(readlink -f "$c/device/device/driver")") == xe ]] && { conn="${c##*/}"; break; }
+	[[ $(basename "$(readlink -f "$c/device/device/driver")") == xe ]] || continue
+	[[ $(cat "$c"/drm_dp_aux*/name 2>/dev/null) == *TC1* ]] && { conn="${c##*/}"; break; }
 done
 if [[ -z $conn ]]; then
 	warn "no bottom panel this boot: it was powered off at boot (keyboard docked); reboot with the keyboard lifted"
