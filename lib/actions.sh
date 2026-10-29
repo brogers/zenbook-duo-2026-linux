@@ -125,6 +125,22 @@ duo_mask_unit() {
 	ok "masked $1"
 }
 
+# duo_busctl_set SERVICE PATH INTERFACE PROPERTY SIGNATURE VALUE : set a system-bus
+# property; revert sets back the value it had the first time.
+duo_busctl_set() {
+	local svc="$1" path="$2" iface="$3" prop="$4" sig="$5" val="$6" was key
+	key="$svc $path $iface $prop"
+	was="$(busctl --system get-property "$svc" "$path" "$iface" "$prop" 2>/dev/null)" ||
+		die "cannot read $prop from $svc"
+	# keep the original value across re-applies
+	grep -qF "busprop"$'\t'"$key"$'\t' "$(_manifest)" 2>/dev/null ||
+		_record busprop "$key" "$sig" "${was#"$sig "}"
+	[[ $was == "$sig $val" ]] && { info "unchanged: $prop = $val"; return 0; }
+	busctl --system set-property "$svc" "$path" "$iface" "$prop" "$sig" "$val" ||
+		die "failed to set $prop on $svc"
+	ok "set $prop = $val"
+}
+
 # duo_pkg_install PKG... : install missing packages; remembers which ones we added.
 duo_pkg_install() {
 	local p missing=()
@@ -303,6 +319,15 @@ duo_revert_manifest() {
 			;;
 		unit-mask)
 			systemctl unmask "$a" >/dev/null 2>&1 && ok "unmasked $a"
+			;;
+		busprop)
+			# a = "SERVICE PATH INTERFACE PROPERTY", b = signature, c = original value
+			# shellcheck disable=SC2086 # a is four words
+			if busctl --system set-property $a "$b" "$c" >/dev/null 2>&1; then
+				ok "restored ${a##* } = $c"
+			else
+				warn "could not restore ${a##* } (service not running?)"
+			fi
 			;;
 		pkg)
 			info "package $a was installed by this module (left installed; remove with: pacman -Rns $a)"
