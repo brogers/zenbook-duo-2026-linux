@@ -15,8 +15,6 @@ Makes the bottom screen of the **ASUS ROG Zephyrus Duo 2026 (GX651AX)** usable: 
 - Kernel cmdline: `xe.vbt_firmware=zenbook-duo/zephyrus-vbt-tc1-edp.bin xe.enable_psr=0 xe.enable_panel_replay=0`.
 - `/etc/udev/rules.d/90-zenbook-duo-zephyrus-lobf.rules` runs `/usr/lib/zenbook-duo/zephyrus-lobf-off` when an xe eDP connector appears; it sets `i915_edp_lobf_debug`, which applies from the connector's next modeset.
 - NVIDIA is dropped from the initramfs (the same `mkinitcpio.conf.d` file filters `nvidia*` out of `MODULES`, which Omarchy's `nvidia.conf` adds). Loaded there, before xe, it left xe's panels black in hybrid mode (`gpu_mux_mode=1`): the LUKS prompt, and the top panel after login until the dGPU runtime-suspended (the panel latched DSC errors, `0x20f` = `04`). The panel registers showed why: with NVIDIA loaded first, the top panel was left with ASSR (DPCD `0x10a`) and Panel Replay (`0x1b0`) enabled, out of sync with symbol errors, a bright random pattern or black. NVIDIA now loads from the root filesystem; in dGPU mode the firmware framebuffer shows the LUKS prompt on the top panel until then.
-- Removes the files of the earlier hand-installed experiment (`/etc/limine-entry-tool.d/zephyrus-duo-*.conf`, `/etc/udev/rules.d/90-zephyrus-duo-lobf.rules`, `/usr/local/lib/zephyrus-duo/`, `/etc/mkinitcpio.conf.d/zephyrus-duo-vbt.conf`, `/usr/lib/firmware/zephyrus-duo/`).
-
 ## Check
 ```sh
 ./duo status display-zephyrus-bottom-edp

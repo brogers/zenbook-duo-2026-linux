@@ -23,18 +23,3 @@ duo_install_file "$MOD_DIR/files/zephyrus-lobf-off" /usr/lib/zenbook-duo/zephyru
 duo_install_file "$MOD_DIR/files/90-zenbook-duo-zephyrus-lobf.rules" /etc/udev/rules.d/90-zenbook-duo-zephyrus-lobf.rules
 duo_cmdline_add xe.vbt_firmware=zenbook-duo/zephyrus-vbt-tc1-edp.bin xe.enable_psr=0 xe.enable_panel_replay=0
 duo_need_initramfs
-
-# The earlier hand-installed experiment used other paths, and an earlier version of this
-# module put the LOBF rule in the initramfs (not needed with NVIDIA out of it); drop them
-# once all of the above is in place (the bootloader and initramfs are regenerated after this
-# anyway).
-for old in /etc/initcpio/install/zenbook-duo-zephyrus-lobf \
-	/etc/limine-entry-tool.d/zephyrus-duo-edp.conf /etc/limine-entry-tool.d/zephyrus-duo-dp1-off.conf \
-	/etc/udev/rules.d/90-zephyrus-duo-lobf.rules /usr/local/lib/zephyrus-duo/lobf-off \
-	/etc/mkinitcpio.conf.d/zephyrus-duo-vbt.conf /usr/lib/firmware/zephyrus-duo/vbt-tc1-edp.bin; do
-	[[ -e $old ]] || continue
-	rm -f "$old"
-	_mark_for_path "$old"
-	info "removed $old (no longer used)"
-done
-rmdir /usr/local/lib/zephyrus-duo /usr/lib/firmware/zephyrus-duo 2>/dev/null || true

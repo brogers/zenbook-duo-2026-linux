@@ -10,7 +10,7 @@ if ((${#missing[@]})); then
 	if [[ -f /usr/lib/firmware/zenbook-duo/zephyrus-vbt-tc1-edp.bin ]]; then
 		info "edited VBT installed; reboot pending (cmdline lacks: ${missing[*]})"
 	elif grep -q 'xe\.vbt_firmware=' /proc/cmdline; then
-		info "a VBT from elsewhere is loaded (experiments/zephyrus-tc1?); apply this module to take it over"
+		info "a VBT from elsewhere is loaded; apply this module to take it over"
 	else
 		warn "bottom panel driven as DisplayPort (stock VBT): modesets and reboots can hang"
 	fi
