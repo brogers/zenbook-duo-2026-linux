@@ -80,7 +80,7 @@ EOF
 }
 
 cmd_list() {
-	local dir rc applied krel n=0 healthy=0 todo=()
+	local dir rc applied krel n=0 healthy=0 todo=() unknown=()
 	krel="$(uname -r)"
 	running_kernel_check
 	printf '%s%-28s %-9s %-9s %-6s %-9s %-10s %s%s\n' "$C_BOLD" MODULE CATEGORY SEVERITY RISK APPLIED STATE SUMMARY "$C_RESET"
@@ -98,13 +98,20 @@ cmd_list() {
 		n=$((n + 1))
 		((rc == 0)) && healthy=$((healthy + 1))
 		((rc == 1)) && todo+=("$MOD_ID")
+		((rc > 1)) && unknown+=("$MOD_ID")
 	done < <(module_dirs)
 	echo
-	if ((${#todo[@]})); then
-		printf '%s%d of %d modules healthy.%s Fix the rest with:\n  sudo ./duo apply %s\n' "$C_BOLD" "$healthy" "$n" "$C_RESET" "${todo[*]}"
-		printf '  (./duo info MODULE explains each one)\n'
-	else
+	if ((healthy == n)); then
 		printf '%sAll %d modules healthy on %s.%s\n' "$C_GREEN" "$n" "$krel" "$C_RESET"
+		return
+	fi
+	printf '%s%d of %d modules healthy.%s\n' "$C_BOLD" "$healthy" "$n" "$C_RESET"
+	if ((${#todo[@]})); then
+		printf 'Fix with:\n  sudo ./duo apply %s\n  (./duo info MODULE explains each one)\n' "${todo[*]}"
+	fi
+	# apply cannot help these (e.g. a panel that was off at boot); status says why
+	if ((${#unknown[@]})); then
+		printf 'Could not check:\n  ./duo status %s\n' "${unknown[*]}"
 	fi
 }
 
