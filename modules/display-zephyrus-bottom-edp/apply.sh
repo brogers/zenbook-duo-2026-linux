@@ -21,5 +21,6 @@ rm -rf "$work"
 duo_install_file "$MOD_DIR/files/zenbook-duo-zephyrus-vbt.conf" /etc/mkinitcpio.conf.d/zenbook-duo-zephyrus-vbt.conf
 duo_install_file "$MOD_DIR/files/zephyrus-lobf-off" /usr/lib/zenbook-duo/zephyrus-lobf-off 0755
 duo_install_file "$MOD_DIR/files/90-zenbook-duo-zephyrus-lobf.rules" /etc/udev/rules.d/90-zenbook-duo-zephyrus-lobf.rules
+duo_install_file "$MOD_DIR/files/90-zenbook-duo-zephyrus-screenpad.rules" /etc/udev/rules.d/90-zenbook-duo-zephyrus-screenpad.rules
 duo_cmdline_add xe.vbt_firmware=zenbook-duo/zephyrus-vbt-tc1-edp.bin xe.enable_psr=0 xe.enable_panel_replay=0
 duo_need_initramfs

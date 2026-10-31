@@ -1,0 +1,3 @@
+# zenbook-duo-2026-linux (display-zephyrus-bottom-edp): the firmware's ScreenPad level dims
+# the bottom panel on top of its eDP backlight (intel_backlight): keep it at max.
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="asus_screenpad", ATTR{brightness}="255"

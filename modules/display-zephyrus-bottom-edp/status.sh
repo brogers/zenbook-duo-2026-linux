@@ -35,5 +35,10 @@ if klog | grep -qE 'vblank wait timed out|flip_done timed out'; then
 	warn "edited VBT active, but a display pipe hung in this boot (see journalctl -k -b)"
 	return 1
 fi
+pad=/sys/class/backlight/asus_screenpad
+if [[ -r $pad/brightness && $(<"$pad/brightness") != "$(<"$pad/max_brightness")" ]]; then
+	warn "asus_screenpad at $(<"$pad/brightness")/$(<"$pad/max_brightness"): the bottom panel is dimmer than its backlight says"
+	return 1
+fi
 ok "bottom panel is ${conn#card*-} (eDP on TC1), Panel Replay and LOBF off"
 return 0
