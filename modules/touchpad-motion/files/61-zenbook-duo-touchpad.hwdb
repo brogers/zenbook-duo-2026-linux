@@ -1,0 +1,11 @@
+# ASUS Zenbook Duo 2026 (UX8407AA) keyboard touchpad, docked (USB 0b05:1cd7)
+# and on Bluetooth (0b05:1cd8).
+#
+# The HID descriptor gives 124.2 x 75.6 mm for 3911 x 2382 units: 31.5 units/mm
+# on both axes. The kernel rounds each axis on its own, to 31 (x) and 32 (y),
+# so vertical motion came out 3% slower than horizontal. 31 on both keeps the
+# axes equal.
+evdev:input:b0003v0B05p1CD7*
+evdev:input:b0005v0B05p1CD8*
+ EVDEV_ABS_01=::31
+ EVDEV_ABS_36=::31

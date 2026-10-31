@@ -148,12 +148,29 @@ Verified on hardware: laptop layout, upright (book) mode, touch, and the login s
 - Bluetooth: the keyboard must be paired for it to work when detached; once paired, backlight and keys work over BT. See [`research-notes.md`](research-notes.md) for pairing steps.
 - Battery: the keyboard sends `5a 3d <percent> <status>` in the same report, over Bluetooth each time the level changes by 1% (status 00; every 7–9 minutes in use on 2026-10-22/23), docked only once full (`5a 3d 64 01`). Connecting sends none: on 2026-10-23 the first report came 18.5 minutes after a reconnect at 01:59 (39% → 38%) and 5.7 minutes after undocking at 10:43 (→ 99%). Through the Array descriptor the percentage pressed the hotkey with that code until the next report: logged on 2026-10-22, `0x38` (56%) held `KEY_PROG1` for 8.5 minutes; 53% is display off, 32% brightness up, 16% brightness down. Since 2026-10-22 `keyboard-hid-asus` drops the report from the input path.
 - The level itself comes from the keyboard's GATT Battery Service (`0x180F`, Battery Level `0x2A19` with notifications): BlueZ reads it within seconds of connecting and follows every change (`org.bluez.Battery1`), and UPower lists it as a keyboard (`keyboard_dev_<address>`). `keyboard-hid-asus` 1.4 (2026-10-22) also registered the HID report as the power supply `asus-keyboard-<address>-battery`. It only appeared at the first report and then made UPower drop BlueZ's entry for the same keyboard, so it added a second source and nothing else; 1.5 (2026-10-23) registers none. UPower 1.91.5 does not bring a dropped BlueZ entry back when the kernel supply goes away (the entry has left its device list), so after updating from 1.4 with the keyboard connected, the keyboard is listed again at its next reconnect or after `systemctl restart upower`.
+- Mic-mute LED: the USB and the Bluetooth link each register `asus::micmute`. When a link goes away (docking, undocking, a Bluetooth disconnect), the LED core turns the LED off after the device is gone, which logged `Setting an LED's brightness failed (-5)` twice per change up to 1.5. Since 1.6 the write is skipped once the link is being removed (verified on 2026-10-29 with a Bluetooth disconnect: no error, the LED is registered again on reconnect).
 
 #### 3.3.1 Touchpad palm rejection (`touchpad-palm`)
 
 - The touchpad (hid-multitouch, 126×74 mm, reports `ABS_MT_TOOL_TYPE` but no pressure or touch size) is on USB when docked and on Bluetooth when detached. systemd's `65-integration.rules` sets `ID_INTEGRATION=external` for both, and libinput 1.32 skips disable-while-typing, edge palm zones and `MT_TOOL_PALM` handling on external touchpads (`Disable-w-typing: n/a`).
 - Fix: a libinput quirk `AttrTPKComboLayout=below` for `0b05:1cd7` and `0b05:1cd8`. An external touchpad+keyboard combo gets the same palm handling as an internal touchpad and pairs DWT with the keyboard of the same vendor/product (`palm: dwt activated with … Touchpad<->Asus Keyboard`).
 - Marking the devices internal instead (like libinput's ROG Flow Z13 quirk) would pair the keyboard with the lid switch: with the keyboard detached and the laptop closed on an external monitor, a key press would report the lid as open, and the touchpad would be disabled. The combo layout has neither effect.
+
+#### 3.3.2 Touchpad motion on Bluetooth and axis resolution (`touchpad-motion`)
+
+- The touchpad scans every 7.1 ms (141 Hz); the Bluetooth LE link has a connection event every 7.5 ms. About every 130 ms two reports leave in the same connection event and reach the host 0.4–0.8 ms apart.
+- libinput's jump detection divides the distance by that arrival gap, sees 10–40 mm per 12 ms frame (limit 20 mm), logs `kernel bug: Touch jump detected and discarded` and drops the motion. `libinput record` while moving the cursor: 43 discards in 30 s, ~2 mm of finger travel each, 4.3% of all motion. Docked (USB, 1 ms polling): none in 7 minutes.
+- Every report carries the touchpad's scan time (HID *Scan Time*, `MSC_TIMESTAMP`), 7.1 ms apart however the reports arrive. libinput ignores it except on a few Dell touchpads.
+- Fix: a libinput Lua plugin for `0b05:1cd8` turns libinput's jump detection off for that device and runs the same test on the scan time. Replaying the recording into a virtual device: 0 instead of 47 discards, 1789 mm of finger travel delivered instead of 1715 mm, no real jump missed.
+- Resolution: the descriptor gives 124.2 × 75.6 mm for 3911 × 2382 units (31.5 units/mm on both axes); the kernel rounds each axis on its own to 31 and 32, so up/down moved 3% less than left/right. An hwdb entry sets 31 on both.
+- Found on the way in libinput 1.32: `tp_process_msc()` returns early for `MSC_TIMESTAMP` instead of for everything else, so the Dell `AttrMscTimestamp=watch` fix never runs; the tools' `--set-plugin-path` adds the default paths instead of using the given one; the plugin API's `usages()` skips the highest code of every event type.
+
+#### 3.3.3 Touchpad acceleration (`touchpad-accel`, optional)
+
+- libinput's touchpad curve, measured on this touchpad at KDE speed 0.2 (screen mm per finger mm): 2.0–3.0 at 3–10 mm/s, 3.0 at 50 and 130 mm/s, 6.3 at 300 mm/s. Apple's Magic Trackpad 2 curve: 0.8–1.1, 2.7, 5.9, 10.9. Half of all motion frames in a recording of normal use were under 30 mm/s.
+- KWin 6.8 has only libinput's flat and adaptive profiles; custom curves are planned for Plasma 6.9 (KWin MR 6937). libinput's custom profile measures speed from one event's arrival time, so on Bluetooth the speed of a bunched report comes out 10–15× too high.
+- `touchpad-accel` preloads a library into `kwin_wayland` that replaces `libinput_event_pointer_get_dx()`/`_get_dy()` for `0b05:1cd7`/`0b05:1cd8` only, with IOHIDFamily's parametric acceleration and the MT2 curve table. An event within 1.5 scan periods of the previous one counts as one scan of motion. Against the touchpad's own scan time, 90% of gains are within ±13%, docked and on Bluetooth.
+- `kwin_wayland` has the file capability `CAP_SYS_NICE`, so ld.so runs it in secure-execution mode: preload paths are ignored, and only a bare name from `/usr/lib` with the set-user-ID bit is preloaded. A first install with a path silently did nothing.
 
 ### 3.4 Power and performance: the biggest win
 
@@ -298,6 +315,8 @@ Measured over 30 s idle on battery: `duo-rotate`, `zenbook-duo-profile-sync` and
 | P2 | `desktop-power-widget`: live power draw in the panel | ✅ |
 | P1 | Bluetooth keyboard | ✅ pairs; backlight and keys work |
 | P1 | `touchpad-palm`: palm rejection and disable-while-typing on the keyboard's touchpad | ✅ USB verified (DWT paired); Bluetooth to be confirmed |
+| P1 | `touchpad-motion`: no dropped motion on Bluetooth, equal axis resolution | ✅ 0 instead of 47 discards in a replayed recording |
+| P2 | `touchpad-accel` (optional): Apple's trackpad acceleration in KWin until Plasma 6.9 | ✅ loaded by KWin since 2026-10-28 |
 | P2 | `display-dpcd-backlight`: panel brightness over DPCD | ✅ |
 | P2 | `display-psr-et-off`: ghost cursor | ✅ |
 | P2 | `display-dsc-10bit`: 10-bit via DSC | ✅ bpp 18 → 30, PR SU stays on, no power cost (4.95 / 4.78 W) |

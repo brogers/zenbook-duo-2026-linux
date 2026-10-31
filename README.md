@@ -33,6 +33,8 @@ one command fixes them, one command undoes it.
 | 🖱️ **Mouse cursor on the top screen** | ❌ ghost copies stay behind | ✅ clean |
 | 💡 **Keyboard backlight and Fn keys** | ❌ backlight stuck, most keys dead when attached | ✅ work, attached and on Bluetooth |
 | 🖐️ **Palm on the touchpad while typing** | ❌ cursor jumps, stray clicks | ✅ ignored, attached and on Bluetooth |
+| ↕️ **Keyboard touchpad motion** | ⚠️ cursor hitches on Bluetooth, up/down 3% slower than left/right | ✅ smooth, equal on both axes |
+| 🎯 **Touchpad acceleration** (optional) | ⚠️ too fast when aiming, too slow for medium moves | ✅ Apple's trackpad curve |
 | 🧭 **Rotation, light and hinge sensors** | ❌ missing | ✅ work |
 | 🚀 **Performance** | ⚠️ capped at 20 W | ✅ Windows power limits (up to 64 W) |
 | 🤫 **Quiet / battery-saver mode** | ⚠️ does nothing | ✅ quiet fans, lower power |
@@ -109,6 +111,8 @@ Measured on a UX8407AA with BIOS 310, `linux-cachyos` 7.2.9 and KDE Plasma 6.7.
 | **Cursor on the top screen** | 2–3 frozen copies of the cursor stay on screen (Panel Replay *Early Transport* bug). | One cursor. Only Early Transport is off; Panel Replay Selective Update keeps saving power. | `display-psr-et-off` |
 | **Keyboard backlight, Fn keys** | The backlight never changes (stock `hid-asus` sends 64-byte reports, the keyboard times out with `-110`). Most Fn keys are dead over USB. The mic-mute LED never lights. | 3-level backlight; Fn keys (brightness, mic mute, backlight, …) work over USB and Bluetooth; the mic-mute LED follows the mute state. | `keyboard-hid-asus` |
 | **Keyboard touchpad while typing** | The touchpad is on USB (docked) or Bluetooth, so libinput treats it as external: no disable-while-typing, no palm detection, and the touchpad's own palm reports are ignored. | Marked as the lower half of a touchpad+keyboard combo: disable-while-typing, edge palm zones and firmware palm reports, docked and on Bluetooth. | `touchpad-palm` |
+| **Keyboard touchpad motion** | On Bluetooth two reports often arrive in one connection event, 0.5 ms apart; libinput measures speed from arrival time, calls that a jump and drops the motion (4% of all motion, a hitch every few hundred ms). The kernel rounds the axes to 31 and 32 units/mm, so up/down moves 3% less than left/right. | A libinput plugin runs the jump test on the touchpad's own scan time (`MSC_TIMESTAMP`) instead; an hwdb entry sets 31 units/mm on both axes. | `touchpad-motion` |
+| **Touchpad acceleration** (optional, not in `--recommended`) | libinput's curve gives 2–3 screen mm per finger mm when aiming slowly and stays flat up to 130 mm/s: too fast for fine aiming, too slow for medium moves. KWin 6.8 offers no custom curve. | Apple's Magic Trackpad 2 curve inside KWin for the keyboard touchpad only (a small preloaded library); KDE's speed slider picks Apple's tracking speed. Until Plasma 6.9 ships custom curves. | `touchpad-accel` |
 | **Sustained performance** | No one runs Intel DTT: power limits stay at the firmware default, PL1 20 W / PL2 30 W. | Windows' own DTT tables per profile: balanced PL1 28→42 W / PL2 55 W, performance PL1 55 W / PL2 64 W. | `power-dtt` |
 | **Power saver** | KDE's "Power Save" leaves the firmware in balanced: neither ASUS quiet nor the Intel low-power slider survives the shared `platform_profile` list. Switching straight from Performance snaps back to Balanced within a second. | Power Save = ASUS quiet fans + SoC low-power + Xe GPU power saving (Windows "Whisper": PL1 20–30 W). Every switch sticks. | `power-profile-sync` |
 | **Wi-Fi latency** (BE201) | Power save always on: 16 ms average to the router, spikes to 158 ms. | On AC: 7 ms, no spikes. On battery: power save stays on. | `wifi-powersave-ac` |
@@ -135,7 +139,7 @@ Details, logs and upstream references for each line: [`docs/hardware-report.md`]
 | Touchscreens | ACPI `RAYD0001` (top) and `RAYD0002` (bottom) | `touchscreen-hid`, touch mapping |
 | Audio | SoundWire, PCI subsystem `1043:1444`: CS42L43 + 2× CS35L56 | `audio-ghost-rt722` matches this board |
 | Sensor hub | Intel ISH `8086:e445` | Needs ASUS's signed firmware for rotation and ambient light |
-| Keyboard | ASUS `0b05:1cd7` (USB, docked) / `0b05:1cd8` (Bluetooth) | `keyboard-hid-asus`, `touchpad-palm` |
+| Keyboard | ASUS `0b05:1cd7` (USB, docked) / `0b05:1cd8` (Bluetooth) | `keyboard-hid-asus`, `touchpad-palm`, `touchpad-motion`, `touchpad-accel` |
 | Distribution | Arch, CachyOS or another Arch derivative | `pacman`/DKMS helpers; config-only modules work anywhere |
 | Desktop | KDE Plasma 6 on Wayland | `desktop-kde-duo` (all other modules are desktop-independent) |
 
@@ -159,7 +163,7 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 </details>
 
 <details>
-<summary><b>📦 The 21 modules</b></summary>
+<summary><b>📦 The 23 modules</b></summary>
 
 | Module | What it changes | Kernels |
 |---|---|---|
@@ -175,6 +179,8 @@ Run `sudo ./duo apply` from your desktop user's shell: `desktop-kde-duo` builds 
 | `display-edp2-tcss` | DKMS `xe` that requests Type-C subsystem power for the bottom panel (xe #9196), built from the running kernel's own sources (a pacman hook fetches them) | 7.x |
 | `keyboard-hid-asus` | DKMS `hid-asus`: Duo IDs, 16-byte feature reports, hotkey descriptor fix, Fn-lock, mic-mute LED, battery report kept out of the hotkeys | 7.2.x, 7.3.x |
 | `touchpad-palm` | libinput quirk: the keyboard's touchpad as a touchpad+keyboard combo (palm rejection, disable-while-typing) | all |
+| `touchpad-motion` | libinput plugin: jump detection on the Bluetooth touchpad's scan time; hwdb: 31 units/mm on both axes | all |
+| `touchpad-accel` | Optional. Library preloaded into KWin that gives the keyboard touchpad Apple's trackpad acceleration (`/etc/zenbook-duo/touchpad-accel.conf` switches back to libinput's) | KDE Plasma 6.8 |
 | `power-dtt` | `thermald --adaptive` with the BIOS's DTT tables | all |
 | `power-profile-sync` | Maps power-profiles-daemon profiles onto asus-wmi, the SoC slider and the Xe GPU | all |
 | `power-runtime-pm` | udev: runtime PM for PCI devices that ship without it | all |
@@ -250,6 +256,9 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 | `hid-asus` Zenbook Duo keyboard support (IDs, report length, hotkey descriptor, battery report filter) | to be submitted; 7.3 has none of it |
 | mac80211: deauthenticate from the old AP when roaming with MFP | [sent to linux-wireless](https://lore.kernel.org/all/20261015-mac80211-roam-mfp-deauth-v1-1-9ccc69b434fd@gmail.com/) on 2026-10-15, carried as DKMS in `wifi-roam-deauth` |
 | Keyboard touchpad palm rejection (libinput quirk) | to be submitted to libinput |
+| Touchpad jump detection on `MSC_TIMESTAMP` (Bluetooth touchpads) | to be reported to libinput |
+| Keyboard touchpad resolution (31 units/mm on both axes) | to be submitted to systemd `60-evdev.hwdb` |
+| Custom touchpad acceleration curves in KWin | [KWin MR 6937](https://invent.kde.org/plasma/kwin/-/merge_requests/6937), planned for Plasma 6.9; `touchpad-accel` can then become settings |
 | HDR (DisplayID 2.0 HDR metadata) | fixed in libdisplay-info 0.4.0; Arch packaging update pending |
 | KDE: one backlight per built-in panel | KDE bug 525717 |
 | KWin crashes when input-device settings are written over D-Bus during a screen change | to be reported to KDE |
@@ -269,7 +278,7 @@ hardware-scan/          ACPI tables (DSDT/SSDT .dat + .dsl) and the DTT data vau
 
 `./duo status` after a kernel update tells you whether every fix is still active.
 
-Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian, Ubuntu or Fedora, the config-only modules apply as they are (`touchscreen-hid`, `sensors-*`, `display-*`, `power-runtime-pm`, `power-tpm-rng`, `power-kbd-lid-wake`, `wifi-powersave-ac`, `power-profile-sync`). The modules that install packages call `pacman`, and the cmdline helper supports Limine and GRUB.
+Arch and Arch-based distributions (tested on CachyOS) get everything. On Debian, Ubuntu or Fedora, the config-only modules apply as they are (`touchscreen-hid`, `sensors-*`, `display-*`, `power-runtime-pm`, `power-tpm-rng`, `power-kbd-lid-wake`, `wifi-powersave-ac`, `power-profile-sync`, `touchpad-palm`, `touchpad-motion`). The modules that install packages call `pacman`, and the cmdline helper supports Limine and GRUB.
 
 ## FAQ
 
